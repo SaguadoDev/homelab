@@ -1,0 +1,38 @@
+# Vaultwarden — gestor de contraseñas (implementación en Rust de la API
+# de Bitwarden), accesible solo desde el tailnet.
+#
+# El contenedor habla HTTP plano a propósito: quien termina TLS es
+# `tailscale serve` en el host, con un certificado real de Let's Encrypt
+# que tailscaled renueva solo. Ver tailscale/README.md.
+#
+# El puerto se publica en 127.0.0.1 y NO en 0.0.0.0. Con el mapeo por
+# defecto ("8080:80") la bóveda queda accesible en HTTP sin cifrar para
+# cualquiera en la red local, saltándose Tailscale por completo.
+# Ver docs/incidencias.md.
+
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: always
+    environment:
+      # Sin registro abierto: las cuentas se crean por invitación.
+      - SIGNUPS_ALLOWED=false
+
+      # DOMAIN debe ser la URL exacta por la que se accede, con esquema y
+      # sin barra final. WebAuthn/passkeys derivan de aquí su RP ID, así
+      # que cambiar este valor invalida las passkeys ya registradas.
+      - DOMAIN=https://<host>.<tailnet>.ts.net
+
+      - SMTP_HOST=smtp.gmail.com
+      - SMTP_FROM=<tu-correo>@example.com
+      - SMTP_PORT=587
+      - SMTP_SECURITY=starttls
+      - SMTP_USERNAME=<tu-correo>@example.com
+      # Contraseña de aplicación de Google, nunca la del correo.
+      # En una instalación real, sácala a un fichero .env fuera de git.
+      - SMTP_PASSWORD=<contraseña-de-aplicacion>
+    volumes:
+      - ./vw-data:/data
+    ports:
+      - "127.0.0.1:8080:80"

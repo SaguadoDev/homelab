@@ -1,0 +1,69 @@
+# Vault App — API propia (Fastify + Postgres) de una aplicación de
+# finanzas personales. El repo de la aplicación va aparte; aquí solo está
+# el despliegue.
+#
+# Nada se publica en las interfaces públicas del host: la API escucha en
+# 127.0.0.1 y `tailscale serve --bg --https=8443` es lo que la expone al
+# tailnet, con certificado real. Eso importa más allá de la limpieza:
+# Android bloquea el tráfico HTTP en claro desde la API 28, así que un
+# endpoint http:// exigiría una excepción en el manifiesto que este
+# montaje evita por completo.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: vault-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      # Collation determinista: el libro mayor ordena nombres y símbolos.
+      LANG: C.UTF-8
+    volumes:
+      - vault-pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  api:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    container_name: vault-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      VAULT_API_TOKEN: ${VAULT_API_TOKEN}
+      VAULT_CRON_ENABLED: ${VAULT_CRON_ENABLED:-1}
+      NODE_ENV: production
+      PORT: 3000
+      TZ: ${TZ:-Europe/Madrid}
+      VAULT_BACKUP_RETENTION_DAYS: ${VAULT_BACKUP_RETENTION_DAYS:-30}
+    ports:
+      - "127.0.0.1:${PORT:-3000}:3000"
+    volumes:
+      - ./data:/data
+      # pg_dump nocturno. Copia local; la que sale de la máquina la hace
+      # scripts/backup-vault-app.sh.
+      - ./backups:/backups
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  vault-pgdata:

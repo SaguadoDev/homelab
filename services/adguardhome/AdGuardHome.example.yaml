@@ -1,0 +1,47 @@
+# Extracto de la configuración real, con lo que tiene valor documental.
+# El fichero completo lo genera AdGuard solo en ./conf/AdGuardHome.yaml y
+# NO se versiona: contiene el hash de la contraseña de administración.
+
+http:
+  # Interfaz web. Ocupa el puerto 80 del host entero (network_mode: host).
+  address: 0.0.0.0:80
+  session_ttl: 30d
+
+users:
+  - name: <usuario-admin>
+    password: <hash-bcrypt>
+
+auth_attempts: 5
+block_auth_min: 15
+
+dns:
+  bind_hosts:
+    - 0.0.0.0
+  port: 53
+
+  # Todo sale cifrado por DoH. Dos proveedores en paralelo: gana el que
+  # responda antes, y si uno se cae la resolución no se detiene.
+  upstream_dns:
+    - https://dns10.quad9.net/dns-query
+    - https://dns.cloudflare.com/dns-query
+    # Split DNS: cualquier consulta *.ts.net va al resolutor de Tailscale
+    # en lugar de salir a internet. Sin esta línea, MagicDNS no resuelve
+    # para los clientes que usan AdGuard como DNS.
+    - '[/ts.net/]100.100.100.100'
+
+  # Necesarios para resolver los nombres de los propios upstreams DoH:
+  # sin bootstrap habría un problema del huevo y la gallina.
+  bootstrap_dns:
+    - 9.9.9.10
+    - 149.112.112.10
+
+  fallback_dns:
+    - 9.9.9.9
+    - 1.1.1.1
+
+  upstream_mode: parallel
+  enable_dnssec: true
+  cache_enabled: true
+  cache_size: 4194304
+  ratelimit: 20
+  refuse_any: true

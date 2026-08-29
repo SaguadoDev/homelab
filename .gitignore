@@ -1,0 +1,29 @@
+# Secretos: nunca
+.env
+*.env
+!.env.example
+*.key
+*.pem
+*.crt
+*.gpg
+backup-passphrase
+
+# Datos de los servicios: nunca
+services/*/vw-data/
+services/*/conf/
+services/*/work/
+services/*/data/
+services/*/backups/
+*.sqlite3
+*.sqlite3-*
+*.dump
+*.tar.gz
+
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Logs
+logs/
+*.log

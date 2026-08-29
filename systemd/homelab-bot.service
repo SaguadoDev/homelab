@@ -1,0 +1,27 @@
+# Bot de monitorización por Telegram.
+#
+#   sudo cp systemd/homelab-bot.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now homelab-bot
+#
+# After= (no Requires=) sobre tailscaled y docker: si uno de los dos tarda
+# en levantar tras un corte de luz, el bot arranca igual y reporta el fallo
+# en lugar de quedarse él también parado. Es justo el momento en el que uno
+# quiere que el monitor esté vivo.
+
+[Unit]
+Description=Monitor de hardware y red del servidor
+Wants=network-online.target
+After=network-online.target tailscaled.service docker.service
+
+[Service]
+Type=simple
+User=homelab
+WorkingDirectory=/home/homelab/bot
+ExecStart=/home/homelab/bot/venv/bin/python main.py
+Restart=always
+RestartSec=10
+Environment="PYTHONUNBUFFERED=1"
+
+[Install]
+WantedBy=multi-user.target

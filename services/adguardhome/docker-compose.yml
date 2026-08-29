@@ -1,0 +1,19 @@
+# AdGuard Home — DNS con filtrado para toda la red local.
+#
+# network_mode: host y no un mapeo de puertos: AdGuard necesita ver la IP
+# de origen real de cada consulta para poder mostrar estadísticas y reglas
+# por cliente. A través del bridge de Docker todas las consultas llegarían
+# con la IP de la pasarela y esa función se pierde.
+#
+# Ocupa el 53 (DNS) y el 80 (interfaz web) del host. Que ocupe el 80 tiene
+# consecuencias para el resto del servidor: ver docs/incidencias.md.
+
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./work:/opt/adguardhome/work
+      - ./conf:/opt/adguardhome/conf
