@@ -1,6 +1,6 @@
-# homelab
+# Servidor Linux autoalojado
 
-Un mini PC reutilizado en casa que hace de **DNS con filtrado para toda la
+Un servidor en casa que hace de **DNS con filtrado para toda la
 red**, **gestor de contraseñas familiar** y **entorno de despliegue** de mis
 propios proyectos. Sin puertos abiertos en el router, con TLS real y con
 copias cifradas que salen solas cada noche.
