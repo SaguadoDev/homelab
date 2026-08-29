@@ -7,10 +7,10 @@ ordenador que había, con el consumo de una bombilla.
 
 | | |
 |---|---|
-| Equipo | Lenovo ThinkCentre (formato mini) |
-| CPU | AMD Ryzen 5 PRO 2400GE — 4 núcleos / 8 hilos |
-| RAM | 14 GiB utilizables |
-| Disco | NVMe 233 GB (≈9% ocupado) |
+| Equipo | Lenovo ThinkCentre M715q |
+| CPU | AMD Ryzen 5 PRO 2400GE |
+| RAM | 16 GB |
+| Disco | NVMe 256 GB |
 | SO | Ubuntu 26.04 LTS |
 | Red | Ethernet a 1 Gb, IP fija por reserva DHCP en el router |
 
