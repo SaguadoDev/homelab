@@ -124,11 +124,25 @@ contra él falla. El origen bueno es `gitlab.com/DuarteSantos8/opengym`.
 RP ID de WebAuthn y cambiarlo invalida todas las passkeys registradas.
 `ORIGIN` sí lleva el puerto; `RP_ID` no. Ver [incidencias](incidencias.md).
 
-**No hay contraseña de recuperación.** El único factor es la passkey. Si un
-móvil se pierde y la credencial no estaba sincronizada en un gestor
-(Vaultwarden, el llavero del sistema), ese perfil se queda fuera y el
-respaldo no lo arregla: la copia salva los datos, no el acceso. Es el
-requisito de operación más importante del servicio.
+**Un perfil es una passkey, y no se puede añadir una segunda.** La API solo
+tiene `/api/register/*`, que crea un perfil nuevo; no existe ningún
+endpoint para registrar otra credencial en uno existente. Tampoco hay
+contraseña de recuperación. Así que la única resiliencia posible es que esa
+passkey esté sincronizada en un gestor (Vaultwarden, el llavero del
+sistema) — el respaldo salva los datos, no el acceso. Es el requisito de
+operación más importante del servicio.
+
+Si aun así se pierde, el historial se puede trasplantar a un perfil nuevo:
+[operaciones → recuperar un perfil](operaciones.md#recuperar-un-perfil-cuya-passkey-se-ha-perdido).
+Ojo con que `INVITE_ONLY=1` bloquea el registro y el admin que emite los
+códigos es justo el que perdió la llave.
+
+**El login usa `allowCredentials: []`** (flujo de credencial descubrible).
+El servidor no manda ninguna lista de candidatas, así que el dispositivo
+solo ofrece la passkey si su propio gestor de credenciales la tiene. En
+Android eso significa Android 14+ con el gestor dado de alta como proveedor
+de llaves de acceso; si no, la pantalla de login sale vacía y no hay nada
+que elegir.
 
 **Instancia cerrada.** `INVITE_ONLY=1`, `ALLOW_GUEST=0` y `ADMIN_UIDS` con
 el id del administrador. Por defecto openGym trae registro abierto, sin

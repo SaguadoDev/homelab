@@ -207,6 +207,68 @@ Casi siempre es una de tres:
    el panel de administración y volver a registrarlo — el historial se
    pierde salvo que se restaure de una copia.
 
+### Recuperar un perfil cuya passkey se ha perdido
+
+**openGym no permite añadir una segunda passkey a un perfil.** La API solo
+tiene `/api/register/*`, que crea uno nuevo: un perfil es una credencial,
+para siempre. Si esa credencial desaparece no hay "olvidé mi contraseña",
+pero los datos son ficheros planos y se pueden trasplantar.
+
+Procedimiento probado de punta a punta en una instancia desechable.
+
+**La trampa que hay que ver venir:** con `INVITE_ONLY=1` el registro
+devuelve `403 a valid invite code is required`, y quien emite los códigos
+es el administrador — es decir, justo quien acaba de perder la llave. La
+instancia se cierra sobre sí misma. Por eso el primer paso es abrirla.
+
+Todo lleva `sudo`: los contenedores escriben `./data` como `root:root` con
+permisos `0600`.
+
+```bash
+cd ~/opengym
+
+# 1. Copia antes de tocar nada, y anota el uid viejo
+sudo ./backup-opengym.sh
+sudo jq -r '.users[] | "\(.id)  \(.name)"' data/db.json
+
+# 2. Abrir el registro: comentar INVITE_ONLY en .env
+docker compose up -d
+
+# 3. Registrar un perfil nuevo desde el navegador, con la passkey nueva.
+#    Sale con un uid distinto: es aleatorio en cada registro.
+sudo jq -r '.users[] | "\(.id)  \(.name)"' data/db.json
+
+# 4. Trasplantar el historial. NO hace falta reiniciar: el estado se lee
+#    de disco en cada petición. Basta con recargar la página.
+sudo mv data/state-<uid-viejo>.json data/state-<uid-nuevo>.json
+
+# 5. Volver a cerrar: ADMIN_UIDS=<uid-nuevo> e INVITE_ONLY=1 en .env
+docker compose up -d
+```
+
+Queda un perfil huérfano —sin datos, con una credencial que ya no existe—
+porque el panel de administración solo sabe *deshabilitar*, no borrar. Se
+quita a mano, y esto **sí** necesita reinicio: `db.json` se lee una vez al
+arrancar y vive en memoria.
+
+```bash
+OLD=<uid-viejo>
+sudo cp -a data/db.json data/db.json.bak
+sudo jq --arg old "$OLD" \
+  'del(.users[] | select(.id==$old)) | del(.creds[] | select(.userId==$old))' \
+  data/db.json.bak | sudo tee data/db.json >/dev/null
+docker compose restart api
+```
+
+`tee` sobrescribe el fichero en lugar de recrearlo, así que conserva el
+`root:root 0600`. El `.bak` se borra cuando la instancia arranque bien.
+
+**Lo que este procedimiento no salva:** las notificaciones push del perfil
+viejo (`subs` sigue apuntando al uid antiguo; se vuelven a activar desde
+Ajustes) y el registro de actividad, que conserva el uid viejo en las
+entradas anteriores. El historial de entrenamientos y el peso corporal
+vuelven enteros.
+
 ---
 
 ## Logs
