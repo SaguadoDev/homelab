@@ -21,8 +21,8 @@ services:
   # que en cada arranque posterior sale por la rama corta.
   #
   # Este contenedor TERMINA (código 0) y se queda en estado "Exited". Es lo
-  # normal, no está caído: el listado de Docker del bot lo mostrará en rojo
-  # porque enumera con `docker ps -a`. Las alertas no lo vigilan.
+  # normal, no está caído. El listado de Docker del bot lo distingue de una
+  # caída real y lo marca en blanco; las alertas no lo vigilan.
   media:
     image: alpine/git
     container_name: opengym-media

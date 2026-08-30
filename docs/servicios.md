@@ -155,9 +155,12 @@ entrenamientos y peso corporal. Es un panel de administración de instancia,
 no de sistema, y conviene que quien comparta la instancia lo sepa.
 
 **Tres contenedores, uno de ellos termina.** `opengym-media` descarga una
-sola vez los ~140 MB de imágenes y GIFs de los ejercicios y sale con código
-0. Su estado normal es `Exited`, así que el listado de Docker del bot lo
-pinta en rojo; las alertas no lo vigilan a propósito.
+sola vez los ~140 MB de imágenes y GIFs de los ejercicios (que no viajan
+dentro de la imagen: el proyecto no los redistribuye) y sale con código 0.
+A partir de ahí quien los sirve es `web`, que los tiene montados en solo
+lectura; por eso depende de él con `service_completed_successfully`. Su
+estado sano es `Exited (0)`: el listado del bot lo marca en blanco, no en
+rojo, y las alertas no lo vigilan a propósito.
 
 **Las notificaciones push funcionan sin exponer nada.** La push sale del
 servidor hacia FCM/APNs (conexión saliente) y el móvil la recibe por su

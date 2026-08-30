@@ -156,7 +156,22 @@ def comprobar_docker_contenedores():
             partes = linea.split('|')
             if len(partes) >= 3:
                 nombre, status, state = partes[0], partes[1], partes[2]
-                icono = "🟢" if state == "running" else "🔴"
+                # Tres estados, no dos. Un contenedor de tarea puntual —el que
+                # descarga la media de openGym, por ejemplo— hace su trabajo y
+                # sale con código 0: su estado sano es "Exited (0)". Pintarlo
+                # igual que uno que se ha caído es una alarma que miente, y a
+                # base de rojos que no significan nada se acaba dejando de
+                # mirar los que sí.
+                #
+                # Esto solo afecta al listado informativo. Las alertas van por
+                # las comprobaciones dedicadas de cada servicio, que siguen
+                # exigiendo "running" y no miran esta función.
+                if state == "running":
+                    icono = "🟢"
+                elif "Exited (0)" in status:
+                    icono = "⚪"
+                else:
+                    icono = "🔴"
                 contenedores.append({
                     'nombre': nombre,
                     'status': status,
