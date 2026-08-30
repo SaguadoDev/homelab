@@ -1,7 +1,8 @@
 {
   "TCP": {
     "443":  { "HTTPS": true },
-    "8443": { "HTTPS": true }
+    "8443": { "HTTPS": true },
+    "8444": { "HTTPS": true }
   },
   "Web": {
     "<host>.<tailnet>.ts.net:443": {
@@ -9,6 +10,9 @@
     },
     "<host>.<tailnet>.ts.net:8443": {
       "Handlers": { "/": { "Proxy": "http://127.0.0.1:3000" } }
+    },
+    "<host>.<tailnet>.ts.net:8444": {
+      "Handlers": { "/": { "Proxy": "http://127.0.0.1:8081" } }
     }
   }
 }

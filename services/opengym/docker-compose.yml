@@ -1,0 +1,88 @@
+# openGym — registro de entrenamientos y peso corporal, accesible solo
+# desde el tailnet.
+#
+# Igual que Vaultwarden: los contenedores hablan HTTP plano y quien termina
+# TLS es `tailscale serve` en el host, con certificado real de Let's
+# Encrypt. Ver tailscale/README.md.
+#
+# EL PUERTO SE PUBLICA EN 127.0.0.1 Y NO EN 0.0.0.0. El compose original
+# del proyecto trae `"${WEB_PORT:-8080}:80"`, que publica en todas las
+# interfaces: la aplicación quedaría accesible en HTTP sin cifrar desde
+# toda la red local, saltándose Tailscale, y además chocaría con el 8080
+# que ya ocupa Vaultwarden. Ver docs/incidencias.md.
+#
+# Sin secciones `build:`: este repositorio no contiene el código de
+# openGym, solo su despliegue. Las imágenes se traen ya construidas del
+# registro de GitLab (amd64 + arm64) con `docker compose pull`.
+
+services:
+  # Descarga única de las imágenes y GIFs de los ejercicios (~140 MB) desde
+  # el dataset de terceros. Se salta sola si ./media ya tiene contenido, así
+  # que en cada arranque posterior sale por la rama corta.
+  #
+  # Este contenedor TERMINA (código 0) y se queda en estado "Exited". Es lo
+  # normal, no está caído: el listado de Docker del bot lo mostrará en rojo
+  # porque enumera con `docker ps -a`. Las alertas no lo vigilan.
+  media:
+    image: alpine/git
+    container_name: opengym-media
+    volumes:
+      - ./media/img:/out/img
+      - ./media/gif:/out/gif
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        if [ -z "$$(ls -A /out/img 2>/dev/null)" ]; then
+          echo "↓ Descargando media de ejercicios (~140 MB, una sola vez)…"
+          git clone --depth 1 https://github.com/hasaneyldrm/exercises-dataset /tmp/ds
+          cp /tmp/ds/images/*.jpg /out/img/ && cp /tmp/ds/videos/*.gif /out/gif/
+          echo "✓ Media lista ($$(ls /out/img | wc -l) imágenes)."
+        else
+          echo "✓ Media ya presente — omitiendo descarga."
+        fi
+    restart: "no"
+
+  # Autenticación por passkeys y datos por usuario. Node sin framework,
+  # sin base de datos: todo son ficheros JSON planos bajo /data.
+  api:
+    image: registry.gitlab.com/duartesantos8/opengym/api:1.2.11
+    container_name: opengym-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # Puerto interno; nginx proxea aquí dentro de la red del compose.
+      # No se publica al host.
+      - PORT=3000
+      - DATA_DIR=/data
+      # El proyecto tiene abierta una incidencia de desfase de zona horaria
+      # en las fechas del historial. El servidor no debería importar —cada
+      # navegador reporta la suya— pero fijarla aquí sale gratis.
+      #
+      # Ojo al comprobarlo: la imagen es node:22-alpine y NO trae tzdata, así
+      # que `docker exec opengym-api date` responde en UTC y parece que TZ se
+      # ignora. No es así: Node lleva sus propios datos de zona horaria (ICU),
+      # y `new Date()` dentro de la aplicación sí devuelve CEST. Lo que manda
+      # es lo segundo. Verificado con:
+      #   docker exec opengym-api node -e "console.log(new Date().toString())"
+      - TZ=${TZ:-Europe/Madrid}
+    volumes:
+      # Perfiles, claves PÚBLICAS de passkey, estado por usuario y el
+      # secreto de la cookie de sesión. ESTO ES LO QUE HAY QUE RESPALDAR.
+      - ./data:/data
+
+  # Sirve el frontend ya construido y proxea /api → api. Un solo origen,
+  # que es lo que exige WebAuthn.
+  web:
+    image: registry.gitlab.com/duartesantos8/opengym/web:1.2.11
+    container_name: opengym-web
+    restart: unless-stopped
+    depends_on:
+      media:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${WEB_PORT:-8081}:80"
+    volumes:
+      - ./media/img:/usr/share/nginx/html/img:ro
+      - ./media/gif:/usr/share/nginx/html/gif:ro

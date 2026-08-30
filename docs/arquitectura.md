@@ -14,7 +14,7 @@ ordenador que había, con el consumo de una bombilla.
 | SO | Ubuntu 26.04 LTS |
 | Red | Ethernet a 1 Gb, IP fija por reserva DHCP en el router |
 
-Dimensionar esto de más es el error clásico del homelab. Con cuatro
+Dimensionar esto de más es el error clásico del homelab. Con seis
 contenedores, un bot y Postgres, el consumo en reposo es de ~2 GiB de RAM
 y prácticamente nada de CPU. El cuello de botella no es la máquina.
 
@@ -42,6 +42,7 @@ flowchart LR
             vw["Vaultwarden<br/>127.0.0.1:8080"]
             api["Vault App API<br/>127.0.0.1:3000"]
             pg[("PostgreSQL 16<br/>sin puerto publicado")]
+            og["openGym<br/>web + api<br/>127.0.0.1:8081"]
         end
     end
 
@@ -57,12 +58,14 @@ flowchart LR
     disp -->|"DNS :53"| adg
     tsd -->|":443"| vw
     tsd -->|":8443"| api
+    tsd -->|":8444"| og
     api --> pg
     adg -->|"DoH"| doh
     bot -.->|"docker inspect"| docker
     bot -->|"alertas"| tg
     vw -.->|"03:00"| drive
     api -.->|"04:30"| drive
+    og -.->|"05:00"| drive
 ```
 
 ## Los tres caminos de entrada
@@ -78,10 +81,16 @@ está en el tailnet, el servidor no existe para él.
 servidor como DNS. Todos los dispositivos de casa resuelven contra
 AdGuard sin configurar nada en cada uno.
 
-**3. Desde el propio host — loopback.** Vaultwarden y la API de Vault
-publican sus puertos **solo** en `127.0.0.1`. Quien los saca al tailnet es
-`tailscale serve`, que corre en el host y por tanto los ve por loopback.
-Ningún servicio de aplicación es alcanzable directamente desde la LAN.
+**3. Desde el propio host — loopback.** Vaultwarden, la API de Vault y
+openGym publican sus puertos **solo** en `127.0.0.1`. Quien los saca al
+tailnet es `tailscale serve`, que corre en el host y por tanto los ve por
+loopback. Ningún servicio de aplicación es alcanzable directamente desde
+la LAN.
+
+Con openGym hubo que corregir el compose del proyecto, que trae
+`"${WEB_PORT:-8080}:80"`: publicado tal cual, habría repetido la incidencia
+de Vaultwarden —servicio en HTTP plano visible desde toda la red local— y
+además habría chocado con el 8080 que ya ocupa la bóveda.
 
 ## Flujo de una consulta DNS
 
@@ -118,7 +127,10 @@ encuentra el propio servidor por su nombre de tailnet.
 | `host` | AdGuard Home | Necesita ver la IP de origen real de cada consulta; a través del bridge todas llegarían con la IP de la pasarela y las estadísticas por cliente dejarían de existir |
 | bridge propio | Vaultwarden | Aislado, con el puerto publicado solo en loopback |
 | bridge propio | Vault App (api + postgres) | Postgres **no publica ningún puerto**: solo la API lo alcanza, por el nombre de servicio dentro de la red del compose |
+| bridge propio | openGym (web + api) | La API **no publica ningún puerto**: solo la alcanza nginx, que proxea `/api` por el nombre de servicio. Un único origen, que es lo que exige WebAuthn |
 
 Que Postgres no exponga puerto no es un detalle: es la razón por la que
 la base de datos no necesita defenderse de nada. Su única superficie es
-la API.
+la API. Lo mismo vale para la API de openGym, que guarda las claves
+públicas de las passkeys y el secreto de sesión: su única superficie es el
+nginx que tiene delante.

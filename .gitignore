@@ -14,6 +14,7 @@ services/*/conf/
 services/*/work/
 services/*/data/
 services/*/backups/
+services/*/media/
 *.sqlite3
 *.sqlite3-*
 *.dump

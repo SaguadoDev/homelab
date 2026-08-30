@@ -1,9 +1,10 @@
 # Servidor Linux autoalojado
 
 Un servidor en casa que hace de **DNS con filtrado para toda la
-red**, **gestor de contraseñas familiar** y **entorno de despliegue** de mis
-propios proyectos. Sin puertos abiertos en el router, con TLS real y con
-copias cifradas que salen solas cada noche.
+red**, **gestor de contraseñas familiar**, **registro de entrenamientos**
+y **entorno de despliegue** de mis propios proyectos. Sin puertos abiertos
+en el router, con TLS real y con copias cifradas que salen solas cada
+noche.
 
 Este repositorio es la configuración de esa máquina: los `docker-compose`
 de cada servicio, la unidad de systemd del bot de monitorización, los
@@ -55,6 +56,7 @@ flowchart LR
             vw["Vaultwarden<br/>127.0.0.1:8080"]
             api["Vault App API<br/>127.0.0.1:3000"]
             pg[("PostgreSQL 16<br/>sin puerto publicado")]
+            og["openGym<br/>web + api<br/>127.0.0.1:8081"]
         end
     end
 
@@ -70,12 +72,14 @@ flowchart LR
     disp -->|"DNS :53"| adg
     tsd -->|":443"| vw
     tsd -->|":8443"| api
+    tsd -->|":8444"| og
     api --> pg
     adg -->|"DoH"| doh
     bot -.->|"docker inspect"| docker
     bot -->|"alertas"| tg
     vw -.->|"03:00"| drive
     api -.->|"04:30"| drive
+    og -.->|"05:00"| drive
 ```
 
 Detalle, flujos y redes de Docker en
@@ -90,6 +94,7 @@ Detalle, flujos y redes de Docker en
 | **AdGuard Home** | DNS con filtrado de publicidad y telemetría para toda la casa, en el router y no en cada dispositivo | `:53` en la LAN · web en `:80` |
 | **Vaultwarden** | Gestor de contraseñas familiar, compatible con los clientes de Bitwarden, sin cuota y sin bóveda en servidor ajeno | `https://<host>.<tailnet>.ts.net` |
 | **Vault App** | API propia de finanzas personales (Fastify + PostgreSQL) | `https://<host>.<tailnet>.ts.net:8443` |
+| **openGym** | Registro de entrenamientos y peso corporal para dos personas, sin suscripción y con el historial en casa | `https://<host>.<tailnet>.ts.net:8444` |
 | **Bot de Telegram** | Toda la observabilidad: alertas de CPU, RAM, disco, temperatura y servicios caídos | Telegram |
 | **Tailscale** | Red privada, terminación TLS y nodo de salida | — |
 | **Cockpit** | Panel de administración del host | `:9090` |
@@ -100,7 +105,7 @@ Ficha de cada uno en [`docs/servicios.md`](docs/servicios.md).
 
 ## Decisiones
 
-Las cuatro que más forma le dan al montaje. Las ocho, con alternativas
+Las cuatro que más forma le dan al montaje. Las diez, con alternativas
 descartadas, en [`docs/decisiones.md`](docs/decisiones.md).
 
 **Tailscale en lugar de abrir puertos.** Abrir el 443 de casa significa
@@ -192,6 +197,11 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
 - [ ] **Mover los datos de AdGuard** de `/path/to/your/` a rutas relativas
       al compose. El repo ya lleva la versión corregida; aplicarlo en la
       máquina implica parar el DNS de la casa un momento.
+- [ ] **openGym se actualiza a mano.** Va con la versión fijada a
+      propósito ([decisiones §9](docs/decisiones.md#9-opengym-con-la-versión-fijada)),
+      así que los parches no llegan solos: hay que mirar los *releases* de
+      GitLab de vez en cuando. Con el proyecto tan joven compensa, pero es
+      una vigilancia manual que algún día habrá que automatizar.
 
 **Copias**
 
@@ -226,7 +236,8 @@ homelab/
 ├── services/
 │   ├── adguardhome/       compose + extracto de configuración
 │   ├── vaultwarden/       compose
-│   └── vault-app/         compose + .env.example
+│   ├── vault-app/         compose + .env.example
+│   └── opengym/           compose + .env.example
 ├── bot/                   Código del bot de monitorización
 ├── systemd/               Unidad del bot
 ├── scripts/               Copias cifradas a Google Drive

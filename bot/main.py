@@ -239,6 +239,7 @@ def _generar_servicios():
     adguard = servicios.comprobar_adguard()
     vaultwarden = servicios.comprobar_vaultwarden()
     vault_app = servicios.comprobar_vault_app()
+    opengym = servicios.comprobar_opengym()
     tailscale = servicios.comprobar_tailscale()
     conectividad = servicios.comprobar_conectividad()
 
@@ -254,6 +255,7 @@ def _generar_servicios():
         f"• AdGuard Home: {adguard}\n"
         f"• Vaultwarden: {vaultwarden}\n"
         f"• Vault App: {vault_app}\n"
+        f"• openGym: {opengym}\n"
         f"• Tailscale: {tailscale}\n"
         f"• Internet: {'Conectado 🟢' if conectividad['ok'] else 'Desconectado 🔴'} "
         f"(`{ping_str}`)"
@@ -511,6 +513,15 @@ async def tarea_monitorizacion(app):
                     parse_mode='Markdown',
                 )
                 logger.warning(f"Alerta Vault App: {vault_app}")
+
+            opengym = servicios.comprobar_opengym()
+            if any(x in opengym for x in ("caída", "Detenido", "Error")) and deberia_alertar('opengym'):
+                await app.bot.send_message(
+                    chat_id=config.TELEGRAM_CHAT_ID,
+                    text=f"🚨 *ALERTA* openGym tiene problemas.\nEstado: {opengym}",
+                    parse_mode='Markdown',
+                )
+                logger.warning(f"Alerta openGym: {opengym}")
 
         except Exception as e:
             logger.error(f"Error en monitorización: {e}")

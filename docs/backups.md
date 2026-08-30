@@ -1,18 +1,19 @@
 # Copias de seguridad
 
-Dos sistemas con datos que no se pueden perder: la bóveda de contraseñas y
-la base de datos financiera. Cada uno tiene dos redes: una local, amplia y
-barata, y una remota, cifrada y corta.
+Tres sistemas con datos que no se pueden perder: la bóveda de contraseñas,
+la base de datos financiera y el historial de entrenamientos. Cada uno
+tiene una red remota cifrada y corta; la base financiera tiene además una
+local, amplia y barata.
 
-| | Vaultwarden | Vault App |
-|---|---|---|
-| Copia local | — | `pg_dump` a las 03:30, 30 días |
-| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días |
-| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG |
-| Lanzador | cron de root | cron del usuario |
-| Cifrado | AES-256 simétrico | AES-256 simétrico |
+| | Vaultwarden | Vault App | openGym |
+|---|---|---|---|
+| Copia local | — | `pg_dump` a las 03:30, 30 días | — |
+| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días |
+| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG |
+| Lanzador | cron de root | cron del usuario | cron de root |
+| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
 
-Las dos remotas comparten passphrase. Ver
+Las tres remotas comparten passphrase. Ver
 [decisiones §6](decisiones.md#6-copias-cifradas-antes-de-salir-de-la-máquina).
 
 ## Instalación
@@ -36,13 +37,19 @@ rclone config          # tipo: drive, scope: drive.file
 # Programación
 sudo crontab -e
 #   0 3 * * *  /home/homelab/homelab/scripts/backup-vaultwarden.sh >> /var/log/backup-vw.log 2>&1
+#   0 5 * * *  /home/homelab/opengym/backup-opengym.sh >> /var/log/backup-opengym.log 2>&1
 crontab -e
 #   30 4 * * * /home/homelab/homelab/scripts/backup-vault-app.sh >> ~/backups/backup-drive.log 2>&1
 ```
 
-Las 03:00 y las 04:30 están separadas a propósito, y ambas lejos del
-`pg_dump` interno de las 03:30, para que dos volcados no compitan por las
-mismas conexiones.
+**openGym va en el cron de root, no en el del usuario.** Sus contenedores
+escriben `./data` como root y con permisos `0600`, así que el usuario del
+servicio no puede leer ni `secret` ni `vapid.json`: desde su cron el script
+aborta en el primer `cp`. Vaultwarden está en el de root por lo mismo.
+
+Las 03:00, las 04:30 y las 05:00 están separadas a propósito, y las tres
+lejos del `pg_dump` interno de las 03:30, para que dos volcados no compitan
+por las mismas conexiones.
 
 ## Qué entra y qué no
 
@@ -56,6 +63,29 @@ restaurar significa reconstruir a mano el `DOMAIN` y el SMTP. Quedan fuera
 script hace su propio volcado en lugar de subir el de las 03:30, para que
 la copia remota no dependa de que el contenedor de la API esté vivo esa
 noche. Solo necesita Postgres.
+
+**openGym** — todo `./data`: `db.json` (perfiles y claves **públicas** de
+las passkeys), un `state-<uid>.json` por usuario, `secret` (firma las
+cookies de sesión), `vapid.json` y `audit.log`. Entran además el
+`docker-compose.yml` y el `.env`, porque `RP_ID` y `ORIGIN` son los que
+atan las passkeys a este hostname: restaurar los datos y levantar la
+instancia bajo otra URL deja dentro unas credenciales que ya no valen.
+
+Como la API escribe esos JSON de forma continua, un `tar` tomado a media
+escritura puede llevarse un fichero cortado. El script los parsea todos en
+el directorio de preparación y aborta si alguno no es JSON válido o si
+`db.json` no tiene ningún usuario: es el equivalente aquí del
+`integrity_check` de Vaultwarden.
+
+Queda fuera `./media` (~140 MB de imágenes y GIFs de ejercicios): es
+contenido de terceros que el contenedor `opengym-media` vuelve a descargar
+solo en el primer arranque.
+
+**Lo que ningún respaldo cubre: las claves privadas de las passkeys.** No
+están en el servidor y no pueden estarlo — viven en el hardware seguro del
+móvil o en el gestor de contraseñas. Si un dispositivo se pierde y la
+credencial no estaba sincronizada, ese perfil se queda fuera y la copia no
+lo arregla. Salva los datos, no el acceso.
 
 **No se respalda** (y es una decisión, no un olvido): el sistema
 operativo, las imágenes de Docker (se reconstruyen desde los compose), la
@@ -88,6 +118,22 @@ docker compose exec postgres \
   pg_restore -U vault -d vault --clean /tmp/vault.dump
 ```
 
+### openGym
+
+```bash
+rclone copy gdrive:openGym_Backups/opengym_FECHA.tar.gz.gpg .
+gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
+    --decrypt opengym_FECHA.tar.gz.gpg > og.tar.gz
+
+mkdir -p opengym && tar -xzf og.tar.gz -C opengym
+cd opengym                                # data/, docker-compose.yml y .env
+docker compose up -d                      # `media` rehace ./media solo
+```
+
+Comprobar antes de dar por buena la restauración que el `RP_ID` del `.env`
+recuperado es el mismo bajo el que se registraron las passkeys. Si no lo
+es, no hay sesión que salvar: hay que volver a registrarlas todas.
+
 ## Probar la restauración
 
 Una copia que no se ha restaurado nunca es una hipótesis. La prueba no
@@ -117,6 +163,22 @@ importarlo:
 ```bash
 pg_restore --list vault.dump | grep -c "TABLE DATA"
 ```
+
+Y para openGym, levantar la copia en un puerto desechable y comprobar que
+la API responde y que los perfiles siguen ahí:
+
+```bash
+docker run -d --name og-test -v "$PWD/data":/data -e DATA_DIR=/data \
+  -p 127.0.0.1:8098:3000 registry.gitlab.com/duartesantos8/opengym/api:1.2.11
+
+curl -s http://127.0.0.1:8098/api/health          # {"ok":true,...}
+jq '.users | length' data/db.json                 # los perfiles esperados
+docker rm -f og-test
+```
+
+Lo que hay que ver: `/api/health` devuelve `ok`, el número de perfiles
+cuadra y `data/secret` **no ha cambiado** tras arrancar — si el contenedor
+lo regenera es que no se restauró, y todas las sesiones abiertas se caen.
 
 ## Deuda
 

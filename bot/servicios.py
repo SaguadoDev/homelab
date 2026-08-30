@@ -67,6 +67,50 @@ def comprobar_vault_app():
         return "Detenido 🔴"
 
 
+def comprobar_opengym():
+    """Comprueba si los contenedores de openGym (web + api) están corriendo.
+
+    El contenedor `opengym-media` queda fuera a propósito: es una tarea de
+    un solo uso que descarga las imágenes de los ejercicios y termina, así
+    que su estado normal es "Exited".
+    """
+    resultados = {}
+    for nombre in ('opengym-web', 'opengym-api'):
+        try:
+            estado = subprocess.check_output(
+                ['docker', 'inspect', '-f', '{{.State.Running}}', nombre],
+                stderr=subprocess.STDOUT, timeout=10
+            ).decode('utf-8').strip()
+            resultados[nombre] = estado == 'true'
+        except subprocess.TimeoutExpired:
+            return "Timeout ⚠️"
+        except Exception:
+            resultados[nombre] = False
+
+    if all(resultados.values()):
+        # Ambas imágenes traen HEALTHCHECK propio: web sondea su nginx y api
+        # su /api/health. Si la api está sana, el camino entero lo está.
+        try:
+            health = subprocess.check_output(
+                ['docker', 'inspect', '-f', '{{.State.Health.Status}}', 'opengym-api'],
+                stderr=subprocess.STDOUT, timeout=10
+            ).decode('utf-8').strip()
+            if health == 'healthy':
+                return "Activo 🟢"
+            elif health == 'starting':
+                return "Iniciando 🟡"
+            else:
+                return "API sin responder 🟡"
+        except Exception:
+            return "Activo 🟢"  # Contenedores corren aunque no podamos leer health
+    elif resultados.get('opengym-web'):
+        return "API caída 🔴"
+    elif resultados.get('opengym-api'):
+        return "Web caída 🔴"
+    else:
+        return "Detenido 🔴"
+
+
 def comprobar_tailscale():
     """Comprueba el estado de Tailscale y si actúa como Exit Node."""
     try:

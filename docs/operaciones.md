@@ -14,6 +14,7 @@ comandos se ejecutan desde ese directorio.
 ├── adguard/        <- servicios en ejecución, con sus datos
 ├── vaultwarden/
 ├── vault_app/
+├── opengym/
 └── bot/
 ```
 
@@ -67,7 +68,8 @@ sudo ~/homelab/scripts/backup-vaultwarden.sh
 ## Publicar un servicio nuevo en el tailnet
 
 1. Que escuche en loopback: `ports: - "127.0.0.1:PUERTO:PUERTO_INTERNO"`.
-2. Elegir un puerto HTTPS libre en el tailnet (443 y 8443 están cogidos).
+2. Elegir un puerto HTTPS libre en el tailnet (443, 8443 y 8444 están
+   cogidos).
 3. Publicarlo:
 
 ```bash
@@ -137,6 +139,73 @@ docker compose exec -T postgres \
 # Migraciones
 docker compose exec api node dist/server/src/scripts/migrate.js
 ```
+
+---
+
+## openGym
+
+### Primera instalación
+
+El id de administrador no existe hasta que hay un perfil, así que la
+instancia se cierra en dos vueltas:
+
+```bash
+cd ~/opengym                       # compose y .env vienen de services/opengym/
+
+# 1ª vuelta: abierta, para poder registrarse
+docker compose pull && docker compose up -d
+#    el contenedor `media` descarga ~140 MB y termina; es normal que salga
+#    como "Exited (0)" en docker ps -a
+
+# Registrar el perfil propio desde https://<host>.<tailnet>.ts.net:8444
+jq -r '.users[] | "\(.id)  \(.name)"' data/db.json
+
+# 2ª vuelta: cerrarla
+#   ADMIN_UIDS=<el id de arriba>
+#   INVITE_ONLY=1
+#   ALLOW_GUEST=0
+docker compose up -d
+```
+
+El código de invitación para la segunda persona sale de **Ajustes → Panel
+de administración**, ya dentro de la aplicación.
+
+**`RP_ID` se decide antes de registrar nada.** Cambiarlo después invalida
+todas las passkeys: no hay migración. Ver [incidencias](incidencias.md).
+
+### Actualizar
+
+openGym va con la versión fijada, no con `:latest`
+([decisiones §9](decisiones.md#9-opengym-con-la-versión-fijada)), así que
+un `docker compose pull` a secas no trae nada nuevo. El procedimiento es:
+
+```bash
+# 1. Leer qué cambia
+#    https://gitlab.com/DuarteSantos8/opengym/-/releases
+# 2. Copia a mano ANTES de tocar nada (root: los datos son root:root 0600)
+sudo ~/opengym/backup-opengym.sh
+# 3. Subir la etiqueta en docker-compose.yml (las dos, web y api)
+docker compose pull && docker compose up -d
+docker compose logs -f --tail=50
+```
+
+El origen bueno es **GitLab**. El repositorio de GitHub que más circula es
+un mirror congelado cuyo compose apunta a imágenes de `ghcr.io` que ya no
+existen.
+
+### Si alguien no puede entrar
+
+Casi siempre es una de tres:
+
+1. **No está en el tailnet.** Sin Tailscale conectado el servidor no
+   existe para ese dispositivo. `tailscale status` en el móvil.
+2. **`RP_ID` u `ORIGIN` no cuadran** con la URL por la que se entra.
+   `ORIGIN` lleva el puerto, `RP_ID` no.
+3. **La passkey no está donde se registró.** No hay contraseña de
+   recuperación. Si se perdió el dispositivo y la credencial no estaba
+   sincronizada en un gestor, el único camino es borrar ese perfil desde
+   el panel de administración y volver a registrarlo — el historial se
+   pierde salvo que se restaure de una copia.
 
 ---
 

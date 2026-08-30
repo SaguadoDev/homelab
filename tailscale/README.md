@@ -23,6 +23,9 @@ sudo tailscale serve --bg --https=443 http://127.0.0.1:8080
 # API de Vault App en el 8443
 sudo tailscale serve --bg --https=8443 http://127.0.0.1:3000
 
+# openGym en el 8444
+sudo tailscale serve --bg --https=8444 http://127.0.0.1:8081
+
 sudo tailscale serve status
 ```
 
@@ -31,7 +34,19 @@ Queda:
 ```
 https://<host>.<tailnet>.ts.net        -> 127.0.0.1:8080   (Vaultwarden)
 https://<host>.<tailnet>.ts.net:8443   -> 127.0.0.1:3000   (API Vault App)
+https://<host>.<tailnet>.ts.net:8444   -> 127.0.0.1:8081   (openGym)
 ```
+
+El puerto no forma parte del RP ID de WebAuthn —la credencial se ata solo
+al nombre de host—, así que las passkeys de openGym funcionan igual en el
+8444. Lo que sí tiene que llevar el puerto es el `ORIGIN` de su `.env`,
+que debe coincidir carácter a carácter con esta URL.
+
+Consecuencia de tener un único nombre MagicDNS: Vaultwarden y openGym
+comparten RP ID, así que el selector de passkeys del móvil ofrecerá las
+credenciales de ambos al entrar en cualquiera de los dos. No es un
+problema de seguridad —cada servicio filtra por su propio credential ID—,
+solo un roce al elegir.
 
 La configuración persiste en el estado de tailscaled: sobrevive a
 reinicios sin necesidad de ninguna unidad de systemd propia.

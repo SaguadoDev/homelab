@@ -113,9 +113,11 @@ los correos de los usuarios, los secretos TOTP de quien tenga 2FA y el
 `docker-compose.yml` con la contraseña SMTP. Nada de eso está cifrado por
 la contraseña maestra.
 
-**Una sola passphrase para los dos sistemas.** Dos significan dos cosas
-que custodiar, y en la práctica una acaba perdiéndose. Con una, el único
-secreto a proteger es ese. Se paga que su filtración comprometa ambos.
+**Una sola passphrase para los tres sistemas.** Varias significan varias
+cosas que custodiar, y en la práctica una acaba perdiéndose. Con una, el
+único secreto a proteger es ese. Se paga que su filtración los comprometa
+todos, y que el coste de esa apuesta crezca con cada sistema que se suma:
+hoy son la bóveda, las finanzas y los entrenamientos.
 
 ---
 
@@ -137,9 +139,52 @@ detectar un problema.
 Un bot de Telegram de 500 líneas cubre la necesidad real: enterarse de que
 algo se ha caído. La pila de observabilidad son tres contenedores más,
 almacenamiento de series temporales, dashboards que mantener y alertas que
-configurar — para vigilar un host y cuatro contenedores.
+configurar — para vigilar un host y seis contenedores.
 
 Además llega a donde hay que llegar: al móvil, sin abrir nada.
 
 **Cuándo cambiaría:** el día que quiera series históricas para ver
 tendencias, no solo el estado ahora mismo.
+
+---
+
+## 9. openGym con la versión fijada
+
+**Alternativas:** `:latest` como AdGuard y Vaultwarden; construir las
+imágenes desde el código.
+
+**Elegido:** etiqueta exacta (`1.2.11`), y se sube a mano tras leer el
+changelog.
+
+Es una excepción deliberada al resto del montaje. Vaultwarden y AdGuard
+llevan años, tienen mucha gente detrás y un `:latest` roto se detecta y se
+corrige en horas. openGym tiene semanas de vida pública, un desarrollador
+principal, y en su propio tracker hay abierta una incidencia de sesiones de
+entrenamiento borradas. Un `docker compose pull` desatendido sobre eso es
+apostar el historial a que esa noche no había regresión.
+
+Construir desde el código se descartó por lo contrario: metería el
+repositorio de un tercero dentro de este, y el `docker-compose.yml` del
+proyecto trae `"${WEB_PORT:-8080}:80"` —publicado en `0.0.0.0`— que habría
+que corregir en cada actualización. Con imágenes ya construidas, este
+repositorio se queda con lo que le toca, que es el despliegue.
+
+**Lo que se paga:** los parches de seguridad no llegan solos. La
+contrapartida es que el servicio no es alcanzable desde internet, así que
+la ventana de exposición es el tailnet.
+
+---
+
+## 10. Un solo nombre MagicDNS para todos los servicios
+
+Los servicios se distinguen por puerto (`:443`, `:8443`, `:8444`), no por
+nombre de host. Dar a cada uno el suyo exigiría un nodo de Tailscale por
+servicio o un proxy inverso delante, que es justo lo que evita la
+[decisión §3](#3-tls-gestionado-por-tailscaled-no-por-un-proxy-inverso).
+
+**Lo que se paga, y no es gratis:** Vaultwarden y openGym comparten
+hostname, luego comparten RP ID de WebAuthn. El selector de passkeys del
+móvil ofrece las credenciales de los dos servicios al entrar en cualquiera
+de ellos. Funciona —cada servicio filtra por su propio credential ID— pero
+hay que elegir a mano. Con dos servicios con passkeys es un roce; con seis
+sería motivo para replantearlo.
