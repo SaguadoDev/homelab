@@ -240,7 +240,7 @@ def _generar_servicios():
     vaultwarden = servicios.comprobar_vaultwarden()
     vault_app = servicios.comprobar_vault_app()
     opengym = servicios.comprobar_opengym()
-    armario = servicios.comprobar_armario()
+    combina = servicios.comprobar_combina()
     tailscale = servicios.comprobar_tailscale()
     conectividad = servicios.comprobar_conectividad()
 
@@ -257,7 +257,7 @@ def _generar_servicios():
         f"• Vaultwarden: {vaultwarden}\n"
         f"• Vault App: {vault_app}\n"
         f"• openGym: {opengym}\n"
-        f"• Armario: {armario}\n"
+        f"• Combina: {combina}\n"
         f"• Tailscale: {tailscale}\n"
         f"• Internet: {'Conectado 🟢' if conectividad['ok'] else 'Desconectado 🔴'} "
         f"(`{ping_str}`)"
@@ -528,14 +528,14 @@ async def tarea_monitorizacion(app):
             # "Sin base de datos" entra a propósito: el contenedor sigue vivo y
             # respondiendo, así que sin esto el fallo pasaría desapercibido
             # mientras el móvil deja de sincronizar en silencio.
-            armario = servicios.comprobar_armario()
-            if any(x in armario for x in ("Sin base de datos", "Detenido", "Error")) and deberia_alertar('armario'):
+            combina = servicios.comprobar_combina()
+            if any(x in combina for x in ("Sin base de datos", "Detenido", "Error")) and deberia_alertar('combina'):
                 await app.bot.send_message(
                     chat_id=config.TELEGRAM_CHAT_ID,
-                    text=f"🚨 *ALERTA* Armario tiene problemas.\nEstado: {armario}",
+                    text=f"🚨 *ALERTA* Combina tiene problemas.\nEstado: {combina}",
                     parse_mode='Markdown',
                 )
-                logger.warning(f"Alerta Armario: {armario}")
+                logger.warning(f"Alerta Combina: {combina}")
 
         except Exception as e:
             logger.error(f"Error en monitorización: {e}")

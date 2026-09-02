@@ -19,10 +19,10 @@
 # El nombre del proyecto compose. Sin esto lo saca del nombre del directorio,
 # así que mover el despliegue lo renombraría y `docker compose ls` mostraría
 # dos proyectos donde solo hay uno.
-name: armario
+name: combina
 
 services:
-  armario-api:
+  combina-api:
     build:
       # La raíz del repo, no server/: el build necesita shared/.
       #
@@ -31,7 +31,7 @@ services:
       # algún día se vuelve a separar el compose del código.
       context: ${RUTA_REPO:-.}
       dockerfile: server/Dockerfile
-    container_name: armario-api
+    container_name: combina-api
     restart: unless-stopped
 
     # 127.0.0.1 en el HOST. Al exterior lo publica tailscale serve:

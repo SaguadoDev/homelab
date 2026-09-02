@@ -62,7 +62,7 @@
 
 set -euo pipefail
 
-DIR_SERVICIO="${ARMARIO_DIR:-/home/homelab/armario}"
+DIR_SERVICIO="${ARMARIO_DIR:-/home/homelab/Combina}"
 DIR_IMAGENES="$DIR_SERVICIO/data/prendas"
 CONTENEDOR_PG="${ARMARIO_PG:-server-postgres-1}"
 BD="${ARMARIO_BD:-armario}"

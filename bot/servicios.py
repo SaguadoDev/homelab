@@ -111,8 +111,8 @@ def comprobar_opengym():
         return "Detenido 🔴"
 
 
-def comprobar_armario():
-    """Comprueba el contenedor de Armario (la API del armario digital).
+def comprobar_combina():
+    """Comprueba el contenedor de Combina (la API del armario digital).
 
     Postgres no se mira aquí: es la instancia compartida que ya vigila
     `comprobar_vault_app()`, y duplicar la comprobación duplicaría la alerta
@@ -125,7 +125,7 @@ def comprobar_armario():
     """
     try:
         estado = subprocess.check_output(
-            ['docker', 'inspect', '-f', '{{.State.Running}}', 'armario-api'],
+            ['docker', 'inspect', '-f', '{{.State.Running}}', 'combina-api'],
             stderr=subprocess.STDOUT, timeout=10
         ).decode('utf-8').strip()
     except subprocess.TimeoutExpired:
@@ -138,7 +138,7 @@ def comprobar_armario():
 
     try:
         health = subprocess.check_output(
-            ['docker', 'inspect', '-f', '{{.State.Health.Status}}', 'armario-api'],
+            ['docker', 'inspect', '-f', '{{.State.Health.Status}}', 'combina-api'],
             stderr=subprocess.STDOUT, timeout=10
         ).decode('utf-8').strip()
         if health == 'healthy':
