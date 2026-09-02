@@ -15,12 +15,21 @@ comandos se ejecutan desde ese directorio.
 ├── vaultwarden/
 ├── vault_app/
 ├── opengym/
+├── armario/        <- el clon del repo de la app: aquí SÍ coinciden
 └── bot/
 ```
 
 El repo **no** es el directorio de ejecución: aquí está la configuración
 sin datos ni secretos. Al cambiar algo, se edita en el repo y se copia al
 directorio de ejecución (o al revés, y se hace commit).
+
+**Armario es la excepción**, y a propósito: su directorio de ejecución es el
+clon del repo de su propia aplicación, con el `docker-compose.yml`
+versionado ahí y el `.env`, `data/` y `logs/` ignorados por su `.gitignore`.
+Se llegó a eso después de probar lo contrario y acabar con dos copias del
+mismo compose que se desincronizaron a la primera. Lo que hay en
+`services/armario/` de este repo es una copia de referencia, saneada. Peaje
+del montaje: un `git clean -xfd` en ese clon se lleva las fotos y el `.env`.
 
 ---
 
@@ -68,8 +77,8 @@ sudo ~/homelab/scripts/backup-vaultwarden.sh
 ## Publicar un servicio nuevo en el tailnet
 
 1. Que escuche en loopback: `ports: - "127.0.0.1:PUERTO:PUERTO_INTERNO"`.
-2. Elegir un puerto HTTPS libre en el tailnet (443, 8443 y 8444 están
-   cogidos).
+2. Elegir un puerto HTTPS libre en el tailnet (443, 8443, 8444 y 8445
+   están cogidos).
 3. Publicarlo:
 
 ```bash
@@ -268,6 +277,79 @@ viejo (`subs` sigue apuntando al uid antiguo; se vuelven a activar desde
 Ajustes) y el registro de actividad, que conserva el uid viejo en las
 entradas anteriores. El historial de entrenamientos y el peso corporal
 vuelven enteros.
+
+---
+
+## Armario
+
+### Primera instalación
+
+Reutiliza el Postgres que ya existe, así que empieza por la base:
+
+```sql
+CREATE ROLE armario_user WITH LOGIN PASSWORD '<generada, no inventada>';
+CREATE DATABASE armario OWNER armario_user;
+```
+
+```bash
+git clone <repo-de-la-app> ~/armario
+cd ~/armario
+mkdir -p data/prendas logs
+cp .env.example .env        # DATABASE_URL, RED_DOCKER, JWT_SECRETO, GEMINI_API_KEY
+#   openssl rand -base64 48   para el JWT_SECRETO
+docker compose up -d --build
+```
+
+Las migraciones se aplican solas al arrancar, **antes** de que levante la
+API: si fallan, el contenedor muere con un error claro en vez de servir
+contra un esquema viejo.
+
+La usuaria se crea a mano — no hay endpoint de registro:
+
+```bash
+docker compose exec armario-api node dist/server/src/crear-usuario.js <usuario> '<contraseña>'
+```
+
+Y se publica en el tailnet:
+
+```bash
+sudo tailscale serve --bg --https=8445 http://127.0.0.1:3001
+curl -s http://127.0.0.1:3001/health      # {"ok":true,"bd":true,...}
+```
+
+**La URL del 8445 va compilada dentro del APK.** Cambiarla obliga a
+recompilar e instalar de nuevo en el móvil, así que se decide antes de
+instalar nada.
+
+### Actualizar
+
+```bash
+cd ~/armario
+git pull
+docker compose up -d --build
+docker compose logs -f armario-api
+```
+
+Como el despliegue es el propio clon, no hay nada que copiar de un sitio a
+otro. Tras el `pull`, comprobar que el protocolo sigue entero:
+
+```bash
+node scripts/e2e-sync.mjs                 # contra 127.0.0.1:3001
+bash scripts/e2e-limpiar.sh               # borra las usuarias de prueba
+```
+
+### Cuadrar disco y base de datos
+
+Cada prenda viva tiene que tener su fichero, y no debería sobrar ninguno:
+
+```bash
+docker compose exec armario-api node dist/server/src/limpiar-huerfanas.js            # en seco
+docker compose exec armario-api node dist/server/src/limpiar-huerfanas.js --de-verdad
+```
+
+Sin `--de-verdad` solo dice qué borraría. Es lo contrario de lo cómodo y es
+a propósito: un fallo aquí borra fotos que no están en ningún otro sitio
+salvo la copia nocturna.
 
 ---
 

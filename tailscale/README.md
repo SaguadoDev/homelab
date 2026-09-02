@@ -26,6 +26,9 @@ sudo tailscale serve --bg --https=8443 http://127.0.0.1:3000
 # openGym en el 8444
 sudo tailscale serve --bg --https=8444 http://127.0.0.1:8081
 
+# API del armario digital en el 8445
+sudo tailscale serve --bg --https=8445 http://127.0.0.1:3001
+
 sudo tailscale serve status
 ```
 
@@ -35,7 +38,13 @@ Queda:
 https://<host>.<tailnet>.ts.net        -> 127.0.0.1:8080   (Vaultwarden)
 https://<host>.<tailnet>.ts.net:8443   -> 127.0.0.1:3000   (API Vault App)
 https://<host>.<tailnet>.ts.net:8444   -> 127.0.0.1:8081   (openGym)
+https://<host>.<tailnet>.ts.net:8445   -> 127.0.0.1:3001   (API Armario)
 ```
+
+Esa URL del 8445 **va compilada dentro del APK** de la aplicación del
+armario, así que cambiarla obliga a recompilar e instalar de nuevo en el
+móvil. Se fijó antes de instalar nada, que es la lección que dejaron las
+passkeys: la URL definitiva se decide antes de registrar nada.
 
 El puerto no forma parte del RP ID de WebAuthn —la credencial se ata solo
 al nombre de host—, así que las passkeys de openGym funcionan igual en el

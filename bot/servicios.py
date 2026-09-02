@@ -111,6 +111,49 @@ def comprobar_opengym():
         return "Detenido 🔴"
 
 
+def comprobar_armario():
+    """Comprueba el contenedor de Armario (la API del armario digital).
+
+    Postgres no se mira aquí: es la instancia compartida que ya vigila
+    `comprobar_vault_app()`, y duplicar la comprobación duplicaría la alerta
+    cuando lo que falla es la base y no este servicio.
+
+    El healthcheck de la imagen llama a /health, que **comprueba la base de
+    datos, no solo que el proceso responde**: un contenedor vivo que no puede
+    escribir es justo el fallo que hay que detectar, y el que un "200 OK" a
+    secas se traga.
+    """
+    try:
+        estado = subprocess.check_output(
+            ['docker', 'inspect', '-f', '{{.State.Running}}', 'armario-api'],
+            stderr=subprocess.STDOUT, timeout=10
+        ).decode('utf-8').strip()
+    except subprocess.TimeoutExpired:
+        return "Timeout ⚠️"
+    except Exception:
+        return "Detenido 🔴"
+
+    if estado != 'true':
+        return "Detenido 🔴"
+
+    try:
+        health = subprocess.check_output(
+            ['docker', 'inspect', '-f', '{{.State.Health.Status}}', 'armario-api'],
+            stderr=subprocess.STDOUT, timeout=10
+        ).decode('utf-8').strip()
+        if health == 'healthy':
+            return "Activo 🟢"
+        elif health == 'starting':
+            return "Iniciando 🟡"
+        else:
+            # El contenedor corre pero /health no responde o dice que la BD no
+            # está: la app del móvil sigue funcionando en local, pero deja de
+            # sincronizar y nadie se entera sin este aviso.
+            return "Sin base de datos 🟡"
+    except Exception:
+        return "Activo 🟢"  # El contenedor corre aunque no podamos leer health
+
+
 def comprobar_tailscale():
     """Comprueba el estado de Tailscale y si actúa como Exit Node."""
     try:

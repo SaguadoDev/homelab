@@ -186,6 +186,83 @@ tailnet, la aplicación no tira de caché.
 
 ---
 
+## Armario — API del armario digital
+
+**Resuelve:** el respaldo y la sincronización de una aplicación Android de
+armario digital (dar de alta prendas con foto, componer conjuntos y
+generarlos). La aplicación funciona entera sin red porque su SQLite local es
+la fuente de verdad; esta API es **espejo y copia buena**, no fuente de
+verdad.
+
+| | |
+|---|---|
+| Imagen | construida aquí (`Dockerfile` en el repo de la aplicación) |
+| Puerto | `127.0.0.1:3001` |
+| Datos | base `armario` en la instancia PG16 compartida · `./data/prendas` (los WebP) |
+| Acceso | `https://<host>.<tailnet>.ts.net:8445` vía `tailscale serve` |
+
+**Reutiliza la instancia de PostgreSQL que ya existe**, con base de datos y
+rol propios (`armario` / `armario_user`), en vez de levantar otro contenedor.
+Un segundo Postgres duplicaría memoria en una máquina modesta y duplicaría la
+ruta de copias.
+
+**El despliegue vive dentro del clon del repo de la aplicación**, no en un
+directorio aparte: el `docker-compose.yml` está versionado ahí y el `.env`,
+`data/prendas/` y `logs/` cuelgan del mismo sitio, bloqueados por su
+`.gitignore`. Es el patrón de Vault App. Se llegó a ello después de probar lo
+contrario: con el compose en un directorio de despliegue y el código en otro
+había **dos copias del mismo fichero**, y se desincronizaron a la primera.
+Peaje: un `git clean -xfd` ahí dentro se lleva las fotos y el `.env`.
+
+**Las imágenes van a disco y las filas guardan punteros.** Nada de base64 en
+columnas: con las fotos dentro de las filas, el `pg_dump` nocturno pasaría de
+~1 MB a ~40 MB cifrados y subidos a Drive cada noche, en lugar de copiar
+ficheros que solo cambian cuando se cataloga algo.
+
+**Las fotos las sirve la API con comprobación de JWT**, nunca
+`tailscale serve` directamente. El tailnet no es la autenticación: estar
+dentro de la red no es una credencial, y el endpoint de imágenes comprueba
+además que la prenda sea de quien la pide, no solo que el fichero exista.
+
+**JWT propio con refresh de larga duración, no passkeys.** Es una decisión
+tomada *por* la cicatriz de este montaje: WebAuthn ata la credencial al RP ID
+del origen y cambiar de URL las invalida sin migración. Para un armario no
+compensa ese riesgo, y además la aplicación promete no volver a enseñar la
+pantalla de acceso salvo reinstalación.
+
+**Sin endpoint de registro.** La usuaria se crea a mano desde el servidor:
+
+```bash
+docker compose exec armario-api node dist/server/src/crear-usuario.js <usuario> '<contraseña>'
+```
+
+Lanzarlo otra vez con el mismo usuario cambia la contraseña. Una ruta pública
+de alta sería una puerta más que vigilar en un servicio de una sola persona.
+
+**Proxy a Gemini para etiquetar la ropa.** La clave vive en el `.env` del
+servidor, nunca en el APK, que es donde acabaría con la aplicación llamando
+directamente a la API de Google. De paso permite cambiar de modelo sin
+recompilar. Es opcional por diseño: sin clave el endpoint responde `503` con
+un motivo y la aplicación sigue con el formulario manual.
+
+**El borrado es blando en la fila y duro en el fichero.** La fila se queda
+con su `deleted_at` —es lo que propaga el borrado a un dispositivo que estuvo
+semanas sin red—, pero el WebP se borra: los datos borrados no se reutilizan
+y guardarlos engordaría la copia nocturna, que sube el directorio entero cada
+noche. Hay un script para cuadrar disco y base si alguna vez se descuadran:
+
+```bash
+docker compose exec armario-api node dist/server/src/limpiar-huerfanas.js            # en seco
+docker compose exec armario-api node dist/server/src/limpiar-huerfanas.js --de-verdad
+```
+
+**`/health` comprueba la base de datos**, no solo que el proceso responde. Un
+contenedor vivo que no puede escribir es justo el fallo que un `200 OK` a
+secas se traga, y el que dejaría al móvil sin sincronizar en silencio. El bot
+lo distingue con un estado propio, `Sin base de datos 🟡`, que sí alerta.
+
+---
+
 ## Bot de Telegram — monitorización
 
 **Resuelve:** saber que algo se ha caído sin tener que mirar. Es toda la

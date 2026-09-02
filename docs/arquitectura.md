@@ -81,8 +81,8 @@ está en el tailnet, el servidor no existe para él.
 servidor como DNS. Todos los dispositivos de casa resuelven contra
 AdGuard sin configurar nada en cada uno.
 
-**3. Desde el propio host — loopback.** Vaultwarden, la API de Vault y
-openGym publican sus puertos **solo** en `127.0.0.1`. Quien los saca al
+**3. Desde el propio host — loopback.** Vaultwarden, la API de Vault,
+openGym y Armario publican sus puertos **solo** en `127.0.0.1`. Quien los saca al
 tailnet es `tailscale serve`, que corre en el host y por tanto los ve por
 loopback. Ningún servicio de aplicación es alcanzable directamente desde
 la LAN.
@@ -128,9 +128,16 @@ encuentra el propio servidor por su nombre de tailnet.
 | bridge propio | Vaultwarden | Aislado, con el puerto publicado solo en loopback |
 | bridge propio | Vault App (api + postgres) | Postgres **no publica ningún puerto**: solo la API lo alcanza, por el nombre de servicio dentro de la red del compose |
 | bridge propio | openGym (web + api) | La API **no publica ningún puerto**: solo la alcanza nginx, que proxea `/api` por el nombre de servicio. Un único origen, que es lo que exige WebAuthn |
+| la red de Vault App | Armario (solo la API) | Se une a una red que ya existe, en vez de crear la suya, porque **reutiliza el Postgres que ya está ahí** con base y rol propios. Levantar un segundo Postgres duplicaría memoria en una máquina modesta y duplicaría la ruta de copias |
 
 Que Postgres no exponga puerto no es un detalle: es la razón por la que
-la base de datos no necesita defenderse de nada. Su única superficie es
-la API. Lo mismo vale para la API de openGym, que guarda las claves
+la base de datos no necesita defenderse de nada. Su única superficie son
+las APIs que lo usan. Lo mismo vale para la API de openGym, que guarda las claves
 públicas de las passkeys y el secreto de sesión: su única superficie es el
 nginx que tiene delante.
+
+Que dos servicios compartan instancia de Postgres tiene una contrapartida
+que conviene tener presente: **un apagón sucio o una migración que salga
+mal afectan a los dos**. Se acepta porque el rol de cada uno solo alcanza
+su propia base, las copias se lanzan por separado y a horas distintas, y
+duplicar el motor en esta máquina costaría más de lo que aísla.

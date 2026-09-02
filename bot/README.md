@@ -19,7 +19,7 @@ Dos cosas a la vez, en el mismo proceso:
 | Comando | Qué devuelve |
 |---|---|
 | `/estado` | CPU, RAM, disco y temperatura, con barras de progreso |
-| `/servicios` | AdGuard, Vaultwarden, Vault App y Tailscale |
+| `/servicios` | AdGuard, Vaultwarden, Vault App, openGym, Armario y Tailscale |
 | `/uptime` | Tiempo activo del sistema |
 | `/red` | IP local y tráfico acumulado |
 | `/procesos` | Top 5 por CPU |
@@ -50,6 +50,16 @@ bloquear el bot entero.
 corran: se lee además el `health` de la API para distinguir "arrancando"
 de "corriendo pero sin responder", y se dice cuál de las dos piezas ha
 caído ("DB caída" frente a "API caída").
+
+**Armario tiene un estado propio para el fallo silencioso.** Su
+`healthcheck` llama a un `/health` que comprueba la base de datos, no solo
+que el proceso responde, así que se distingue `Sin base de datos 🟡` de
+`Detenido 🔴` y los dos alertan. Es el caso que un `200 OK` a secas se
+traga: el contenedor sigue vivo, la aplicación del móvil sigue funcionando
+en local, y lo único que pasa es que deja de sincronizar — en silencio y
+durante días, si nadie mira. No se comprueba su Postgres porque es el
+compartido, que ya vigila el estado de Vault App: duplicarlo duplicaría la
+alerta cuando lo que falla es la base y no el servicio.
 
 ## Instalación
 

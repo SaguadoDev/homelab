@@ -1,8 +1,9 @@
 # Servidor Linux autoalojado
 
 Un servidor en casa que hace de **DNS con filtrado para toda la
-red**, **gestor de contraseñas familiar**, **registro de entrenamientos**
-y **entorno de despliegue** de mis propios proyectos. Sin puertos abiertos
+red**, **gestor de contraseñas familiar**, **registro de entrenamientos**,
+**respaldo de un armario digital** y **entorno de despliegue** de mis
+propios proyectos. Sin puertos abiertos
 en el router, con TLS real y con copias cifradas que salen solas cada
 noche.
 
@@ -57,10 +58,12 @@ flowchart LR
             api["Vault App API<br/>127.0.0.1:3000"]
             pg[("PostgreSQL 16<br/>sin puerto publicado")]
             og["openGym<br/>web + api<br/>127.0.0.1:8081"]
+            arm["Armario<br/>127.0.0.1:3001"]
         end
     end
 
     subgraph ext ["Servicios externos"]
+        gem["Gemini<br/>etiquetado de ropa"]
         doh["DNS-over-HTTPS<br/>Quad9 · Cloudflare"]
         drive["Google Drive<br/>copias cifradas GPG"]
         tg["Telegram"]
@@ -73,13 +76,17 @@ flowchart LR
     tsd -->|":443"| vw
     tsd -->|":8443"| api
     tsd -->|":8444"| og
+    tsd -->|":8445"| arm
     api --> pg
+    arm --> pg
     adg -->|"DoH"| doh
+    arm -->|"autotag"| gem
     bot -.->|"docker inspect"| docker
     bot -->|"alertas"| tg
     vw -.->|"03:00"| drive
     api -.->|"04:30"| drive
     og -.->|"05:00"| drive
+    arm -.->|"05:30"| drive
 ```
 
 Detalle, flujos y redes de Docker en
@@ -95,6 +102,7 @@ Detalle, flujos y redes de Docker en
 | **Vaultwarden** | Gestor de contraseñas familiar, compatible con los clientes de Bitwarden, sin cuota y sin bóveda en servidor ajeno | `https://<host>.<tailnet>.ts.net` |
 | **Vault App** | API propia de finanzas personales (Fastify + PostgreSQL) | `https://<host>.<tailnet>.ts.net:8443` |
 | **openGym** | Registro de entrenamientos y peso corporal para dos personas, sin suscripción y con el historial en casa | `https://<host>.<tailnet>.ts.net:8444` |
+| **Armario** | API de respaldo y sincronización de una aplicación Android de armario digital, con proxy a Gemini para etiquetar la ropa | `https://<host>.<tailnet>.ts.net:8445` |
 | **Bot de Telegram** | Toda la observabilidad: alertas de CPU, RAM, disco, temperatura y servicios caídos | Telegram |
 | **Tailscale** | Red privada, terminación TLS y nodo de salida | — |
 | **Cockpit** | Panel de administración del host | `:9090` |
@@ -105,7 +113,7 @@ Ficha de cada uno en [`docs/servicios.md`](docs/servicios.md).
 
 ## Decisiones
 
-Las cuatro que más forma le dan al montaje. Las diez, con alternativas
+Las cuatro que más forma le dan al montaje. Las doce, con alternativas
 descartadas, en [`docs/decisiones.md`](docs/decisiones.md).
 
 **Tailscale en lugar de abrir puertos.** Abrir el 443 de casa significa

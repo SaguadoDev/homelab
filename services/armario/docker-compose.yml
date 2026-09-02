@@ -1,0 +1,81 @@
+# API del armario (CLAUDE.md §6b).
+#
+# Este fichero se copia a /home/<usuario>/armario/ en el m715q, junto con un
+# .env que NO está en git.
+#
+# Convenciones heredadas del homelab, obligatorias:
+#
+#   1. Escucha en 127.0.0.1, nunca en 0.0.0.0. Estar dentro de la LAN no es una
+#      credencial: en esa red hay wifi de invitados y una tele con firmware
+#      viejo.
+#   2. El TLS lo termina `tailscale serve`, no un proxy inverso. Nada de Nginx
+#      delante: certificado real de Let's Encrypt renovado solo.
+#   3. Postgres NO se levanta aquí. Se reutiliza la instancia PG16 que ya
+#      existe, con base de datos y rol nuevos. Otro contenedor duplicaría
+#      memoria en un m715q modesto y duplicaría la ruta de copias.
+#   4. Secretos en .env, fuera de git.
+#   5. Política de reinicio explícita.
+
+# El nombre del proyecto compose. Sin esto lo saca del nombre del directorio,
+# así que mover el despliegue lo renombraría y `docker compose ls` mostraría
+# dos proyectos donde solo hay uno.
+name: armario
+
+services:
+  armario-api:
+    build:
+      # La raíz del repo, no server/: el build necesita shared/.
+      #
+      # El despliegue vive DENTRO del repo, así que el contexto por defecto
+      # (el directorio actual) ya es el bueno. RUTA_REPO solo hace falta si
+      # algún día se vuelve a separar el compose del código.
+      context: ${RUTA_REPO:-.}
+      dockerfile: server/Dockerfile
+    container_name: armario-api
+    restart: unless-stopped
+
+    # 127.0.0.1 en el HOST. Al exterior lo publica tailscale serve:
+    #   sudo tailscale serve --bg --https 8445 http://127.0.0.1:3001
+    ports:
+      - '127.0.0.1:3001:3001'
+
+    environment:
+      HOST: '0.0.0.0' # dentro del contenedor; fuera solo escucha 127.0.0.1
+      PUERTO: '3001'
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRETO: ${JWT_SECRETO}
+      JWT_DURACION: ${JWT_DURACION:-30m}
+      REFRESH_DURACION_DIAS: ${REFRESH_DURACION_DIAS:-365}
+      DIR_IMAGENES: /datos/prendas
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+
+    volumes:
+      # Bind mount. ~30 MB para 150 prendas. Va al script de copias nocturnas
+      # junto con el pg_dump.
+      - ./data/prendas:/datos/prendas
+
+    networks:
+      - homelab
+
+    healthcheck:
+      # Comprueba la BD, no solo que el proceso responde: un contenedor vivo
+      # que no puede escribir es justo el fallo que hay que detectar.
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+    logging:
+      # Sin esto los logs crecen sin límite en un disco que no sobra.
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+networks:
+  homelab:
+    external: true
+    # La red donde ya vive Postgres. Se pone en el .env porque el nombre
+    # depende de cómo se llame el proyecto compose que la creó.
+    name: ${RED_DOCKER}

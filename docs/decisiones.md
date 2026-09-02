@@ -188,3 +188,47 @@ móvil ofrece las credenciales de los dos servicios al entrar en cualquiera
 de ellos. Funciona —cada servicio filtra por su propio credential ID— pero
 hay que elegir a mano. Con dos servicios con passkeys es un roce; con seis
 sería motivo para replantearlo.
+
+## 11. Armario despliega desde el clon de su propio repositorio
+
+**Alternativas:** un directorio de despliegue aparte, como los otros
+servicios (`~/armario/` con el compose copiado y los datos al lado).
+
+**Elegido:** el clon del repositorio de la aplicación **es** el directorio
+de ejecución. El `docker-compose.yml` está versionado ahí, y el `.env`,
+`data/prendas/` y `logs/` cuelgan del mismo sitio bloqueados por su
+`.gitignore`.
+
+Se montó primero de la otra forma y duró unas horas. El problema no es la
+comodidad: es que había **dos copias del mismo `docker-compose.yml`**, la
+del repositorio y la desplegada, y se desincronizaron a la primera
+modificación. Con el compose y el código en sitios distintos, además, el
+contexto de construcción tiene que apuntar al repositorio de todas formas
+—la imagen necesita el directorio compartido de tipos—, así que la
+separación no aislaba nada y solo añadía una variable más que mantener.
+
+Vault App ya despliega así, de modo que no es un patrón nuevo en la
+máquina: conviven los dos.
+
+**Lo que cuesta:** un `git clean -xfd` en ese directorio se lleva las fotos
+de la usuaria y el `.env`, porque son justo lo que git ignora. Lo recupera
+la copia nocturna, pero se pierde lo del día. Está avisado en el README del
+servicio, que es donde se va a leer antes de escribir ese comando.
+
+## 12. Armario reutiliza la instancia de PostgreSQL, con rol y base propios
+
+**Alternativas:** un segundo contenedor de Postgres solo para este
+servicio.
+
+**Elegido:** la instancia que ya existe, con `armario` / `armario_user`
+nuevos y sin más permisos que sobre su propia base.
+
+Un segundo motor duplicaría memoria en una máquina modesta y, peor,
+duplicaría la ruta de copias: otro volcado, otra verificación y otro
+horario que cuadrar. Con roles separados el aislamiento que de verdad
+importa —que un servicio no lea los datos del otro— ya está.
+
+**Lo que cuesta:** un apagón sucio o una migración que salga mal afectan a
+los dos servicios a la vez. Se acepta porque las copias se lanzan por
+separado y a horas distintas (04:30 y 05:30), y porque el fallo compartido
+que de verdad da miedo —que no haya SAI— no lo arregla tener dos motores.

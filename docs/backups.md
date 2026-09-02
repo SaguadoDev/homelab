@@ -1,19 +1,19 @@
 # Copias de seguridad
 
-Tres sistemas con datos que no se pueden perder: la bóveda de contraseñas,
-la base de datos financiera y el historial de entrenamientos. Cada uno
-tiene una red remota cifrada y corta; la base financiera tiene además una
-local, amplia y barata.
+Cuatro sistemas con datos que no se pueden perder: la bóveda de
+contraseñas, la base de datos financiera, el historial de entrenamientos y
+el armario digital. Cada uno tiene una red remota cifrada y corta; la base
+financiera tiene además una local, amplia y barata.
 
-| | Vaultwarden | Vault App | openGym |
-|---|---|---|---|
-| Copia local | — | `pg_dump` a las 03:30, 30 días | — |
-| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días |
-| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG |
-| Lanzador | cron de root | cron del usuario | cron de root |
-| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
+| | Vaultwarden | Vault App | openGym | Armario |
+|---|---|---|---|---|
+| Copia local | — | `pg_dump` a las 03:30, 30 días | — | — |
+| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días | 05:30 → Drive, 7 días |
+| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG |
+| Lanzador | cron de root | cron del usuario | cron de root | cron del usuario |
+| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
 
-Las tres remotas comparten passphrase. Ver
+Las cuatro remotas comparten passphrase. Ver
 [decisiones §6](decisiones.md#6-copias-cifradas-antes-de-salir-de-la-máquina).
 
 ## Instalación
@@ -40,16 +40,24 @@ sudo crontab -e
 #   0 5 * * *  /home/homelab/opengym/backup-opengym.sh >> /var/log/backup-opengym.log 2>&1
 crontab -e
 #   30 4 * * * /home/homelab/homelab/scripts/backup-vault-app.sh >> ~/backups/backup-drive.log 2>&1
+#   30 5 * * * /home/homelab/armario/server/scripts/backup-armario.sh >> /home/homelab/armario/logs/backup.log 2>&1
 ```
+
+**Armario va en el cron del usuario**, como Vault App: su bind mount de
+imágenes es del usuario del servicio —el contenedor corre como `node`, uid
+1000— y el volcado sale por `docker exec`, para lo que basta con estar en el
+grupo `docker`. Su script vive en el repo de la aplicación, no en este, por
+la misma razón por la que el despliegue vive ahí: una sola copia.
 
 **openGym va en el cron de root, no en el del usuario.** Sus contenedores
 escriben `./data` como root y con permisos `0600`, así que el usuario del
 servicio no puede leer ni `secret` ni `vapid.json`: desde su cron el script
 aborta en el primer `cp`. Vaultwarden está en el de root por lo mismo.
 
-Las 03:00, las 04:30 y las 05:00 están separadas a propósito, y las tres
-lejos del `pg_dump` interno de las 03:30, para que dos volcados no compitan
-por las mismas conexiones.
+Las 03:00, las 04:30, las 05:00 y las 05:30 están separadas a propósito, y
+las cuatro lejos del `pg_dump` interno de las 03:30, para que dos volcados no
+compitan por las mismas conexiones. Armario y Vault App comparten instancia
+de Postgres, así que ahí la separación no es cortesía sino necesidad.
 
 ## Qué entra y qué no
 
@@ -80,6 +88,25 @@ el directorio de preparación y aborta si alguno no es JSON válido o si
 Queda fuera `./media` (~140 MB de imágenes y GIFs de ejercicios): es
 contenido de terceros que el contenedor `opengym-media` vuelve a descargar
 solo en el primer arranque.
+
+**Armario** — `pg_dump --format=custom --no-owner` de la base `armario`, el
+directorio `data/prendas/` con los WebP, y el `docker-compose.yml` con su
+`.env`. El `.env` lleva la contraseña de Postgres y el secreto del JWT:
+restaurar sin el secreto no pierde datos —el refresh es opaco y se valida
+contra la tabla `sesiones`, no contra él—, pero sin la contraseña de la base
+hay que rehacer el rol a mano.
+
+La verificación no se conforma con el tamaño del fichero: el script pide el
+índice del volcado con `pg_restore -l` (dentro del contenedor de Postgres,
+que es donde está el cliente) y aborta si no aparecen las tablas que tienen
+que aparecer. Además deja escrito en el log cuántas prendas vivas había esa
+noche, para que una caída a cero se vea de un vistazo al mirar atrás.
+
+Las fotos van **enteras cada noche**: son ~30 MB con 150 prendas, o sea
+~210 MB en Drive con la rotación de siete días. Es asumible y está vigilado.
+Si algún día molesta, lo que toca no es bajar la retención sino separar las
+fotos (un `rclone sync` a su propio directorio) del volcado diario de la
+base.
 
 **Lo que ningún respaldo cubre: las claves privadas de las passkeys.** No
 están en el servidor y no pueden estarlo — viven en el hardware seguro del
@@ -130,8 +157,32 @@ cd opengym                                # data/, docker-compose.yml y .env
 docker compose up -d                      # `media` rehace ./media solo
 ```
 
-Comprobar antes de dar por buena la restauración que el `RP_ID` del `.env`
-recuperado es el mismo bajo el que se registraron las passkeys. Si no lo
+### Armario
+
+```bash
+rclone copy gdrive:Armario_Backups/armario_FECHA.tar.gz.gpg .
+gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
+    --decrypt armario_FECHA.tar.gz.gpg > armario.tar.gz
+
+mkdir -p armario && tar -xzf armario.tar.gz -C armario
+
+# La base, en la instancia compartida
+docker exec -i <contenedor-postgres> psql -U <superusuario> -d postgres \
+  -c 'CREATE DATABASE armario OWNER armario_user;'
+docker exec -i <contenedor-postgres> pg_restore -U armario_user -d armario \
+  --no-owner < armario/armario.dump
+
+cd armario                                # data/, docker-compose.yml y .env
+docker compose up -d
+```
+
+Las fotos salen del tar ya en `data/prendas/`, que es justo donde las espera
+el bind mount. Para comprobar que base y disco cuadran después de restaurar:
+`docker compose exec armario-api node dist/server/src/limpiar-huerfanas.js`
+(en seco) debe decir cero huérfanas.
+
+Comprobar antes de dar por buena la restauración de openGym que el `RP_ID`
+del `.env` recuperado es el mismo bajo el que se registraron las passkeys. Si no lo
 es, no hay sesión que salvar: hay que volver a registrarlas todas.
 
 ## Probar la restauración
@@ -179,6 +230,38 @@ docker rm -f og-test
 Lo que hay que ver: `/api/health` devuelve `ok`, el número de perfiles
 cuadra y `data/secret` **no ha cambiado** tras arrancar — si el contenedor
 lo regenera es que no se restauró, y todas las sesiones abiertas se caen.
+
+**Armario, restaurado el 2 de septiembre de 2026.** Es hasta ahora el único
+que se ha probado de las dos formas que importan.
+
+La copia, a una base aparte para no tocar la buena:
+
+```bash
+docker exec -i <contenedor-postgres> psql -U <superusuario> -d postgres \
+  -c 'CREATE DATABASE armario_restaurada OWNER armario_user;'
+docker exec -i <contenedor-postgres> pg_restore -U armario_user \
+  -d armario_restaurada --no-owner < armario/armario.dump
+
+# Filas tabla por tabla contra la base viva
+for t in usuarios prendas armarios outfits prenda_armarios outfit_prendas; do
+  echo -n "$t "
+  docker exec <contenedor-postgres> psql -tAq -U armario_user -d armario \
+    -c "select count(*) from $t"
+  docker exec <contenedor-postgres> psql -tAq -U armario_user \
+    -d armario_restaurada -c "select count(*) from $t"
+done
+
+# Y los bytes de las fotos
+md5sum armario/data/*.webp
+```
+
+Cuadraron las filas de las seis tablas y los `md5sum` de las fotos contra el
+bind mount. La base de prueba se borró después.
+
+**Y la aplicación**, que es la prueba que de verdad cuenta: borrando los
+datos desde los ajustes de Android y trayéndolo todo del servidor. Volvieron
+las prendas, sus conjuntos y sus fotos. Hasta hacer eso, la sincronización
+era una hipótesis con muy buena pinta.
 
 ## Deuda
 
