@@ -32,7 +32,7 @@ def comprobar_vaultwarden():
 def comprobar_vault_app():
     """Comprueba si los contenedores de Vault App (API + Postgres) están corriendo."""
     resultados = {}
-    for nombre in ('vault-api', 'vault-postgres'):
+    for nombre in ('server-api-1', 'server-postgres-1'):
         try:
             estado = subprocess.check_output(
                 ['docker', 'inspect', '-f', '{{.State.Running}}', nombre],
@@ -48,7 +48,7 @@ def comprobar_vault_app():
         # Verificar que la API responde al health check
         try:
             health = subprocess.check_output(
-                ['docker', 'inspect', '-f', '{{.State.Health.Status}}', 'vault-api'],
+                ['docker', 'inspect', '-f', '{{.State.Health.Status}}', 'server-api-1'],
                 stderr=subprocess.STDOUT, timeout=10
             ).decode('utf-8').strip()
             if health == 'healthy':
@@ -59,9 +59,9 @@ def comprobar_vault_app():
                 return "API sin responder 🟡"
         except Exception:
             return "Activo 🟢"  # Contenedores corren aunque no podamos leer health
-    elif resultados.get('vault-api'):
+    elif resultados.get('server-api-1'):
         return "DB caída 🔴"
-    elif resultados.get('vault-postgres'):
+    elif resultados.get('server-postgres-1'):
         return "API caída 🔴"
     else:
         return "Detenido 🔴"
