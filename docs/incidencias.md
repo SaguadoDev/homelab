@@ -199,3 +199,50 @@ ninguna variable TLS y no hay proxy inverso en la máquina.
 días y nada los renovaba. Dentro de un año alguien —yo— los habría
 encontrado y dado por buenos. Lo que no se usa se borra, no se deja "por
 si acaso".
+
+---
+
+## 9. Tailscale se llevó por delante la resolución DNS del host
+
+**Síntoma.** El host dejó de resolver nombres externos: `ping` por IP
+funcionaba y `getent hosts` no devolvía nada. El bot de Telegram murió con
+"Temporary failure in name resolution" y estuvo caído varios días sin que
+nadie se enterase — precisamente porque el bot es quien avisa.
+
+**Causa.** tailscaled no consiguió hablar con systemd-resolved y cayó a su
+**modo directo**: en ese modo sobrescribe `/etc/resolv.conf` —symlink
+incluido— con un fichero propio que apunta solo a `100.100.100.100`. La
+resolución del host pasa entonces a depender por completo de que tailscaled
+esté sano, en vez de ser independiente. `resolvectl` lo delata en una línea:
+`resolv.conf mode: foreign` en lugar de `stub`.
+
+**Solución.** Devolver el fichero al symlink de systemd-resolved:
+
+```bash
+sudo rm /etc/resolv.conf
+sudo ln -s /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
+sudo systemctl restart systemd-resolved tailscaled
+```
+
+Con el symlink en su sitio, tailscaled detecta resolved y registra
+`100.100.100.100` como split DNS solo para `tail587adf.ts.net`, no como
+servidor global. El host resuelve por `DNS=1.1.1.1 8.8.8.8` de
+`/etc/systemd/resolved.conf`, a propósito **sin pasar por AdGuard**: si el
+host resolviese contra su propio AdGuard, un bloqueo o una caída de AdGuard
+se llevaría por delante la resolución de la máquina que lo aloja.
+
+**Lección.** El arreglo a mano no es permanente, y el estado se
+auto-perpetua al revés: una vez que `/etc/resolv.conf` es un fichero normal,
+tailscaled lo vuelve a tomar en el arranque siguiente y se queda en modo
+directo. Comprobado el 2026-09-07 — tras un reinicio, el fichero estaba otra
+vez en modo directo aunque la resolución siguiera funcionando. Lo que hay
+que vigilar no es el síntoma, que aparece tarde, sino el tipo del fichero:
+
+```bash
+readlink -f /etc/resolv.conf                    # debe dar stub-resolv.conf
+resolvectl status | grep 'resolv.conf mode'     # debe decir stub, no foreign
+```
+
+Y la lección de segundo orden, que es la cara: **el monitor no puede ser lo
+único que vigila.** El bot detecta que se caen los demás, pero cuando se cae
+él no lo detecta nadie. Necesita un vigilante externo a sí mismo.
