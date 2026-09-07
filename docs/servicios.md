@@ -276,7 +276,7 @@ observabilidad del montaje.
 
 | | |
 |---|---|
-| Ejecución | systemd (`homelab-bot.service`), venv de Python |
+| Ejecución | systemd (`server-bot.service`), venv de Python |
 | Alertas | CPU, RAM, disco, temperatura, servicios caídos |
 | Antirruido | Cooldown de 15 min por causa |
 

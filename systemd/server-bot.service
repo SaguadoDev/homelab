@@ -1,8 +1,14 @@
 # Bot de monitorización por Telegram.
 #
-#   sudo cp systemd/homelab-bot.service /etc/systemd/system/
+# Este fichero ES el que corre: /etc/systemd/system/server-bot.service es un
+# symlink aquí, para que el repo sea la fuente de verdad y no vuelva a haber
+# dos copias que se desincronizan (ver bf8b580, donde el repo llevaba meses
+# con nombres de contenedor que ya no existían).
+#
+#   sudo ln -sfn /home/server/homelab/systemd/server-bot.service \
+#                /etc/systemd/system/server-bot.service
 #   sudo systemctl daemon-reload
-#   sudo systemctl enable --now homelab-bot
+#   sudo systemctl enable --now server-bot
 #
 # After= (no Requires=) sobre tailscaled y docker: si uno de los dos tarda
 # en levantar tras un corte de luz, el bot arranca igual y reporta el fallo
@@ -18,16 +24,16 @@
 # justo lo que convirtió una caída de DNS en varios días de silencio.
 
 [Unit]
-Description=Monitor de hardware y red del servidor
+Description=Monitor de Hardware y Red para el servidor Lenovo
 Wants=network-online.target
 After=network-online.target nss-lookup.target tailscaled.service docker.service
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=homelab
-WorkingDirectory=/home/homelab/bot
-ExecStart=/home/homelab/bot/venv/bin/python main.py
+User=server
+WorkingDirectory=/home/server/bot
+ExecStart=/home/server/bot/venv/bin/python main.py
 Restart=always
 RestartSec=30
 Environment="PYTHONUNBUFFERED=1"

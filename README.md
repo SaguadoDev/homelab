@@ -247,7 +247,7 @@ homelab/
 │   ├── vault-app/         compose + .env.example
 │   └── opengym/           compose + .env.example
 ├── bot/                   Código del bot de monitorización
-├── systemd/               Unidad del bot
+├── systemd/               Unidad del bot (symlinkada desde /etc)
 ├── scripts/               Copias cifradas a Google Drive
 └── tailscale/             serve, certificados y comprobaciones
 ```

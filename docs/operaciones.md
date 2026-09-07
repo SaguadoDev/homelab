@@ -23,6 +23,13 @@ El repo **no** es el directorio de ejecución: aquí está la configuración
 sin datos ni secretos. Al cambiar algo, se edita en el repo y se copia al
 directorio de ejecución (o al revés, y se hace commit).
 
+**Excepción: la unidad del bot.** `/etc/systemd/system/server-bot.service`
+es un *symlink* a `systemd/server-bot.service` de este repo, así que no hay
+copia que sincronizar: se edita aquí y basta un `daemon-reload`. Se hizo así
+porque la variante de "copiar a mano" ya falló una vez — el repo llevaba
+meses con nombres de contenedor que no existían, y seguir el procedimiento al
+pie de la letra habría tumbado la vigilancia de Vault App.
+
 **Armario es la excepción**, y a propósito: su directorio de ejecución es el
 clon del repo de su propia aplicación, con el `docker-compose.yml`
 versionado ahí y el `.env`, `data/` y `logs/` ignorados por su `.gitignore`.
@@ -37,7 +44,7 @@ del montaje: un `git clean -xfd` en ese clon se lleva las fotos y el `.env`.
 
 ```bash
 docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-systemctl status homelab-bot
+systemctl status server-bot
 tailscale status
 tailscale serve status
 ss -tlnp                       # quién escucha realmente, y en qué interfaz
@@ -357,7 +364,7 @@ salvo la copia nocturna.
 
 ```bash
 docker compose logs -f --tail=100      # por servicio
-journalctl -u homelab-bot -f           # bot
+journalctl -u server-bot -f            # bot
 journalctl -u tailscaled --since -1h   # tailscale (incluye ACME)
 tail -f ~/bot/logs/bot.log             # log propio del bot, rotado a 5 MB
 ```
@@ -400,7 +407,7 @@ y el bot `Restart=always`. La comprobación son dos minutos:
 ```bash
 uptime                                        # confirmar que reinició
 docker ps --format '{{.Names}}\t{{.Status}}'  # los cuatro arriba
-systemctl status homelab-bot
+systemctl status server-bot
 tailscale status
 dig @<IP_LAN> ejemplo.com +short              # DNS de la casa
 ```
