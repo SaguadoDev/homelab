@@ -15,8 +15,16 @@ auth_attempts: 5
 block_auth_min: 15
 
 dns:
+  # IP de LAN concreta, NO 0.0.0.0. En modo host el comodín se queda con
+  # TODAS las direcciones del puerto 53, incluida 127.0.0.53, y eso impide
+  # que systemd-resolved levante su stub. Ver incidencia 9: es la causa de
+  # que tailscaled se llevara por delante /etc/resolv.conf.
+  #
+  # AdGuard solo sirve a la LAN (comprobado en el querylog: ningún cliente
+  # 100.x del tailnet), así que no hace falta añadir la IP de tailscale0 —
+  # y añadirla crearía una dependencia de arranque con tailscaled.
   bind_hosts:
-    - 0.0.0.0
+    - 192.168.1.50
   port: 53
 
   # Todo sale cifrado por DoH. Dos proveedores en paralelo: gana el que

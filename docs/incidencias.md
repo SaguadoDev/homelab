@@ -209,40 +209,98 @@ funcionaba y `getent hosts` no devolvía nada. El bot de Telegram murió con
 "Temporary failure in name resolution" y estuvo caído varios días sin que
 nadie se enterase — precisamente porque el bot es quien avisa.
 
-**Causa.** tailscaled no consiguió hablar con systemd-resolved y cayó a su
-**modo directo**: en ese modo sobrescribe `/etc/resolv.conf` —symlink
-incluido— con un fichero propio que apunta solo a `100.100.100.100`. La
-resolución del host pasa entonces a depender por completo de que tailscaled
-esté sano, en vez de ser independiente. `resolvectl` lo delata en una línea:
-`resolv.conf mode: foreign` en lugar de `stub`.
+**Causa aparente, y por qué era una pista falsa.** `/etc/resolv.conf` era un
+fichero regular escrito por tailscaled apuntando solo a `100.100.100.100`,
+en lugar del symlink a `/run/systemd/resolve/stub-resolv.conf`. La
+corrección obvia —borrar el fichero, rehacer el symlink, reiniciar
+tailscaled— **funciona y no sobrevive**. Se aplicó tres veces y las tres
+volvió al estado roto. La segunda hipótesis, que systemd-resolved no
+estuviera activo o habilitado, también era falsa: estaba `enabled` y
+`active` las tres veces.
 
-**Solución.** Devolver el fichero al symlink de systemd-resolved:
+**Causa real.** Una cadena de tres eslabones que solo se ve entera mirando
+el log de tailscaled:
 
-```bash
-sudo rm /etc/resolv.conf
-sudo ln -s /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf
-sudo systemctl restart systemd-resolved tailscaled
+```
+dns: resolvedIsActuallyResolver error: resolv.conf doesn't point to
+     systemd-resolved; points to [1.1.1.1 8.8.8.8 1.0.0.1]
+dns: [resolved-ping=yes rc=resolved resolved=not-in-use ret=direct]
+dns: using "direct" mode
 ```
 
-Con el symlink en su sitio, tailscaled detecta resolved y registra
-`100.100.100.100` como split DNS solo para `tail587adf.ts.net`, no como
-servidor global. El host resuelve por `DNS=1.1.1.1 8.8.8.8` de
-`/etc/systemd/resolved.conf`, a propósito **sin pasar por AdGuard**: si el
-host resolviese contra su propio AdGuard, un bloqueo o una caída de AdGuard
-se llevaría por delante la resolución de la máquina que lo aloja.
+`resolved-ping=yes` es la clave: tailscaled **sí** hablaba con resolved. No
+era un problema de arranque ni de orden de servicios. Lo que fallaba era el
+contenido del fichero, y el motivo estaba tres capas más abajo:
 
-**Lección.** El arreglo a mano no es permanente, y el estado se
-auto-perpetua al revés: una vez que `/etc/resolv.conf` es un fichero normal,
-tailscaled lo vuelve a tomar en el arranque siguiente y se queda en modo
-directo. Comprobado el 2026-09-07 — tras un reinicio, el fichero estaba otra
-vez en modo directo aunque la resolución siguiera funcionando. Lo que hay
-que vigilar no es el síntoma, que aparece tarde, sino el tipo del fichero:
+1. AdGuard Home corre en `network_mode: host` con `bind_hosts: 0.0.0.0`. El
+   comodín no ocupa "la IP del servidor": ocupa **todas** las direcciones
+   del puerto 53, `127.0.0.53` incluida.
+2. Por eso existía `/etc/systemd/resolved.conf.d/adguard.conf` con
+   `DNSStubListener=no`, puesto a propósito meses antes para que AdGuard
+   pudiera quedarse el 53. Sin stub, nadie escucha en `127.0.0.53`.
+3. Con el stub desactivado, systemd-resolved convierte `stub-resolv.conf` en
+   un **symlink a `resolv.conf`**, el fichero de upstreams. Eso es
+   comportamiento documentado, no corrupción. Resultado: rehacer el symlink
+   dejaba a `/etc/resolv.conf` apuntando a `1.1.1.1 8.8.8.8 1.0.0.1`, jamás
+   a `127.0.0.53`.
+
+tailscaled comprueba exactamente eso para decidir si resolved está en uso.
+Como nunca lo estaba, se declaraba dueño del fichero y volvía a modo
+directo. **Determinista, no intermitente**: el arreglo manual no podía
+funcionar ninguna de las tres veces.
+
+Dicho de otro modo: dos requisitos incompatibles conviviendo sin que nadie
+lo hubiera notado. AdGuard en modo host necesitaba el 53 entero; la
+integración tailscaled↔resolved necesitaba `127.0.0.53` libre.
+
+**Solución.** Acotar AdGuard y devolverle el stub a resolved. El orden
+importa: AdGuard tiene que soltar el 53 **antes** de que resolved intente
+levantar el stub, y `/etc/resolv.conf` tiene que ser ya el symlink correcto
+**antes** de reiniciar tailscaled, o vuelve a modo directo y lo sobrescribe.
 
 ```bash
-readlink -f /etc/resolv.conf                    # debe dar stub-resolv.conf
-resolvectl status | grep 'resolv.conf mode'     # debe decir stub, no foreign
+cd /home/server/adguard && docker compose stop        # 1. soltar el 53
+sudo sed -i 's/^    - 0\.0\.0\.0$/    - 192.168.1.50/' \
+     /path/to/your/conf/AdGuardHome.yaml               # 2. acotar el bind
+sudo mv /etc/systemd/resolved.conf.d/adguard.conf \
+        /etc/systemd/resolved.conf.d/adguard.conf.bak  # 3. devolver el stub
+docker compose start                                   # 4. AdGuard en .50
+sudo systemctl restart systemd-resolved                # 5. stub en .53
+sudo ln -sf /run/systemd/resolve/stub-resolv.conf /etc/resolv.conf   # 6.
+sudo systemctl restart tailscaled                      # 7. y solo ahora
 ```
 
-Y la lección de segundo orden, que es la cara: **el monitor no puede ser lo
-único que vigila.** El bot detecta que se caen los demás, pero cuando se cae
-él no lo detecta nadie. Necesita un vigilante externo a sí mismo.
+Se para con AdGuard detenido, no reiniciado, porque AdGuard reescribe su
+propio `AdGuardHome.yaml` al apagarse y se llevaría por delante la edición.
+
+El resultado se ve en el mismo log, con el antes y el después:
+
+```
+13:14:36  resolved=not-in-use                     ret=direct            -> "direct" mode
+13:29:43  resolved=file  resolv-conf-mode=stub    ret=systemd-resolved  -> "systemd-resolved" mode
+```
+
+**Verificación.** Que `resolvectl status` diga `stub` no basta; lo que hay
+que comprobar es que el host y la LAN resuelven por caminos distintos:
+
+```bash
+dig +short @192.168.1.50 doubleclick.net   # 0.0.0.0  -> la LAN pasa por el filtro
+resolvectl query doubleclick.net           # IP real  -> el host no
+resolvectl status tailscale0               # 100.100.100.100 solo para tail587adf.ts.net
+```
+
+**Lecciones.** Tres, y la tercera es la que costó dinero.
+
+*Un arreglo que hay que repetir no es un arreglo.* La primera vez parece
+mala suerte; la tercera es un diagnóstico incompleto. Que el síntoma
+desaparezca al aplicar algo no demuestra que la causa fuera esa.
+
+*El comodín no es "todas las interfaces", es también todo el loopback.*
+`0.0.0.0` en un contenedor en modo host se queda con `127.0.0.53` y
+`127.0.0.54`, no solo con la IP de LAN. Un servicio de DNS en modo host y
+systemd-resolved no caben en la misma máquina sin acotar el bind.
+
+*El monitor no puede ser lo único que vigila.* El bot detecta que se caen
+los demás; cuando se cae él, no lo detecta nadie. Necesita un vigilante
+externo a la máquina — un latido saliente hacia un servicio de terceros
+sirve, y no abre ningún puerto.

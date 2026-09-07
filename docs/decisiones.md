@@ -51,6 +51,28 @@ Manteniendo el host con resolutores públicos:
 **Lo que se paga:** el tráfico del propio servidor no pasa por el filtro.
 Es un host sin navegador; no se pierde nada real.
 
+**Cómo se consigue, que no es evidente.** La decisión es fácil de enunciar
+y tiene una trampa de implementación que costó tres intentos (incidencia 9).
+El host resuelve por el *stub* de systemd-resolved en `127.0.0.53`, que a su
+vez consulta `1.1.1.1` y `8.8.8.8`. Para que ese stub pueda existir, AdGuard
+**no puede escuchar en `0.0.0.0`**: en `network_mode: host` el comodín ocupa
+todas las direcciones de la máquina, el loopback entero incluido, y ahí está
+`127.0.0.53`.
+Por eso `bind_hosts` es la IP de LAN concreta y no el comodín.
+
+El montaje se sostiene sobre tres piezas que hay que mirar juntas:
+
+| Pieza | Valor | Si se rompe |
+|---|---|---|
+| `bind_hosts` de AdGuard | `192.168.1.50` | el stub no puede bindear |
+| `DNSStubListener` | `yes` (por defecto) | no hay `127.0.0.53` |
+| `/etc/resolv.conf` | symlink a `stub-resolv.conf` | tailscaled pasa a modo directo |
+
+La tercera es consecuencia de las dos primeras: tailscaled comprueba que
+`/etc/resolv.conf` apunte a `127.0.0.53` y, si no, se declara dueño del
+fichero. No es un capricho suyo, es su forma de detectar si resolved está
+realmente en uso.
+
 ---
 
 ## 3. TLS gestionado por tailscaled, no por un proxy inverso

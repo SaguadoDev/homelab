@@ -15,7 +15,7 @@ bloqueador; el DNS sí los cubre.
 |---|---|
 | Imagen | `adguard/adguardhome:latest` |
 | Red | `network_mode: host` |
-| Puertos | `53/udp`, `53/tcp` (DNS) · `80/tcp` (interfaz web) |
+| Puertos | `53/udp`, `53/tcp` en `192.168.1.50` (DNS) · `80/tcp` (interfaz web) |
 | Datos | `./work`, `./conf` |
 
 **Upstreams por DoH.** Quad9 y Cloudflare en modo `parallel`: se lanzan
@@ -29,6 +29,12 @@ consultas `*.ts.net` al resolutor de Tailscale.
 
 **Ojo con el puerto 80.** Al ir en modo host, la interfaz web de AdGuard
 ocupa el 80 de la máquina entera. Ver [incidencias](incidencias.md).
+
+**Y ojo con el 53: `bind_hosts` es `192.168.1.50`, no `0.0.0.0`.** El comodín
+en modo host se queda también con `127.0.0.53`, que es donde systemd-resolved
+necesita levantar su stub para que el host resuelva sin pasar por AdGuard.
+Volver a poner `0.0.0.0` reabre la incidencia 9 entera. AdGuard solo atiende
+a la LAN, así que la IP de LAN basta.
 
 ---
 
