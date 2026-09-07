@@ -289,7 +289,41 @@ resolvectl query doubleclick.net           # IP real  -> el host no
 resolvectl status tailscale0               # 100.100.100.100 solo para tail587adf.ts.net
 ```
 
-**Lecciones.** Tres, y la tercera es la que costó dinero.
+**Daño colateral: los contenedores se quedaron sin DNS.** El arreglo dejó al
+host perfecto y rompió a los siete contenedores en marcha, que es un fallo
+que no aparece en ninguna de las verificaciones de DNS del host.
+
+Los contenedores en redes de usuario resuelven por el DNS embebido de Docker
+(`127.0.0.11`), que reenvía al resolutor que el host tenía **en el momento de
+crear el contenedor** — `100.100.100.100`. Al pasar tailscaled a modo
+`systemd-resolved`, deja de configurar upstreams propios: resolved se encarga
+del reparto. Consecuencia, comprobada con una consulta cruda:
+
+```
+100.100.100.100 -> rcode 2 (SERVFAIL)
+tailscaled: dns: resolver: forward: no upstream resolvers set, returning SERVFAIL
+```
+
+Desde dentro, `EAI_AGAIN` en todo. AdGuard no se enteró porque resuelve por
+sus propios upstreams DoH con `bootstrap_dns` en IP directa, así que la casa
+siguió navegando mientras los servicios del servidor no resolvían nada.
+
+**Se arregla reiniciando los contenedores**: al arrancar releen la
+configuración y Docker, al ver que el `resolv.conf` del host solo tiene
+loopback, sustituye por sus resolutores por defecto.
+
+```bash
+docker restart combina-api opengym-api opengym-web server-api-1
+```
+
+Para que no dependa de ese automatismo, lo explícito es fijarlo en
+`/etc/docker/daemon.json` — pendiente:
+
+```json
+{ "dns": ["1.1.1.1", "8.8.8.8"] }
+```
+
+**Lecciones.** Cuatro, y la última es la que costó dinero.
 
 *Un arreglo que hay que repetir no es un arreglo.* La primera vez parece
 mala suerte; la tercera es un diagnóstico incompleto. Que el síntoma
@@ -299,6 +333,12 @@ desaparezca al aplicar algo no demuestra que la causa fuera esa.
 `0.0.0.0` en un contenedor en modo host se queda con `127.0.0.53` y
 `127.0.0.54`, no solo con la IP de LAN. Un servicio de DNS en modo host y
 systemd-resolved no caben en la misma máquina sin acotar el bind.
+
+*Arreglar el DNS del host no arregla el DNS de los contenedores, y puede
+romperlo.* Son dos resolutores distintos y las comprobaciones del host pasan
+las siete mientras dentro no resuelve nada. Después de tocar `resolv.conf`
+hay que probar **desde dentro de un contenedor**, no solo con `getent` en el
+host.
 
 *El monitor no puede ser lo único que vigila.* El bot detecta que se caen
 los demás; cuando se cae él, no lo detecta nadie. Necesita un vigilante
