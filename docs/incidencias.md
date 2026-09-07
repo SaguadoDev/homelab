@@ -344,3 +344,94 @@ host.
 los demás; cuando se cae él, no lo detecta nadie. Necesita un vigilante
 externo a la máquina — un latido saliente hacia un servicio de terceros
 sirve, y no abre ningún puerto.
+
+---
+
+## 10. El exit node prometía IPv6 que no tenía
+
+**Síntoma.** Con Tailscale conectado y el servidor como *exit node*, el
+cliente navegaba a ~0,2 Mbps. Desconectando Tailscale, 300 Mbps. El servidor,
+en cambio, iba perfecto. Llevaba tiempo así y nadie había tocado el router.
+
+**Causa.** Cinco eslabones, y el primero lo puso Tailscale solo:
+
+1. Al activar el exit node, Tailscale escribió `/etc/sysctl.d/99-tailscale.conf`
+   con `net.ipv6.conf.all.forwarding = 1`, **permanente**.
+2. En Linux, con el reenvío IPv6 activo el kernel **ignora los anuncios del
+   router (RA) salvo que `accept_ra` valga `2`**. Valía `1`. La máquina pasa a
+   comportarse como router y deja de autoconfigurarse.
+3. `enp1s0f0` se quedó solo con `fe80::` link-local: sin IPv6 global y sin
+   ruta por defecto IPv6.
+4. Tailscale siguió anunciando `::/0` a los clientes.
+5. El cliente creía tener IPv6 por el túnel, mandaba el tráfico IPv6 al
+   servidor y el servidor no tenía dónde entregarlo. Se tragaban en silencio.
+
+La asimetría es lo que despista: en el servidor IPv6 falla **al instante**
+(`Network is unreachable`), así que el servidor navega bien. En el cliente
+**no falla, se cuelga** — la ruta existe, los paquetes entran al túnel y
+mueren sin respuesta. Cada web con doble pila intenta IPv6 primero y espera a
+que expire el temporizador antes de caer a IPv4. Eso son los 0,2 Mbps.
+
+Y explica el "antes funcionaba y no he cambiado nada": **se rompió en el
+primer reinicio posterior a activar el exit node**, no al activarlo. Un
+fichero en `sysctl.d` solo hace efecto al arrancar, así que la causa y el
+síntoma quedaron separados por semanas.
+
+**Diagnóstico.** Tres comandos que lo cierran:
+
+```bash
+ip -6 addr show enp1s0f0 scope global    # vacío = no hay IPv6 global
+ip -6 route show default                 # vacío = no hay salida IPv6
+sysctl net.ipv6.conf.all.forwarding net.ipv6.conf.all.accept_ra
+                                         # forwarding=1 con accept_ra=1 -> RA ignorados
+tailscale debug prefs | grep -A3 AdvertiseRoutes   # ¿anuncia ::/0 igualmente?
+```
+
+**Solución.** Depende de si el ISP da IPv6. Probar sin persistir, que no corta
+nada, y esperar al siguiente RA (van cada pocos minutos):
+
+```bash
+sudo sysctl -w net.ipv6.conf.all.accept_ra=2
+sudo sysctl -w net.ipv6.conf.enp1s0f0.accept_ra=2
+```
+
+Si aparece IPv6 global y `ping6 -c3 2606:4700:4700::1111` responde, hacerlo
+permanente:
+
+```bash
+printf 'net.ipv6.conf.all.accept_ra = 2\nnet.ipv6.conf.enp1s0f0.accept_ra = 2\n' \
+  | sudo tee /etc/sysctl.d/99-tailscale-ipv6-ra.conf
+sudo sysctl --system
+```
+
+Si el ISP no da IPv6, el servidor no debe prometer lo que no tiene:
+
+```bash
+sudo tailscale set --advertise-routes=0.0.0.0/0
+```
+
+Ojo: cambiar las rutas anunciadas puede exigir **volver a aprobarlas** en la
+consola de administración, y hasta entonces el exit node desaparece del
+cliente.
+
+**Estado: pendiente de aplicar.** Falta saber si el ISP entrega IPv6 para
+elegir camino. Comprobación de 30 segundos que confirma el diagnóstico sin
+tocar el servidor: desactivar solo el exit node en el cliente, dejando
+Tailscale conectado. Si vuelven los 300 Mbps, es esto.
+
+**Lecciones.**
+
+*Un nodo que anuncia una ruta tiene que poder entregarla.* Anunciar `::/0`
+sin IPv6 es peor que no anunciar nada: sin la ruta el cliente usa su propio
+IPv6 o cae a IPv4 al instante; con ella, se queda esperando. Una ruta rota
+hace más daño que una ruta ausente.
+
+*Activar el reenvío tiene efectos que nadie asocia con el reenvío.* Poner
+`forwarding=1` desactiva de hecho la autoconfiguración IPv6 de la máquina. Ni
+Tailscale avisa ni el síntoma aparece hasta el siguiente arranque.
+
+*Medir mal es peor que no medir.* La primera hipótesis fue un límite de
+ancho de banda en el router, sostenida en mediciones de `curl` hechas durante
+un pico de tráfico y con el DNS contando dentro de `time_total`. Repetidas en
+frío daban 240–440 Mbps. Antes de acusar a la red, medir cinco veces y mirar
+el desglose (`time_namelookup`, `time_connect`, `time_starttransfer`).

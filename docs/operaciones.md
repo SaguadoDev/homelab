@@ -118,6 +118,20 @@ seleccionar el servidor como *exit node*. El servidor ya anuncia
 `0.0.0.0/0` y `::/0`; la ruta tiene que estar aprobada en la consola de
 administración de Tailscale.
 
+**Antes de usarlo, comprobar que el servidor tiene IPv6 de verdad.** Si
+anuncia `::/0` sin salida IPv6, el cliente queda a ~0,2 Mbps: cree que tiene
+IPv6 por el túnel y cada conexión espera a que expire el temporizador antes
+de caer a IPv4. Es la incidencia 10, y no se nota desde el servidor.
+
+```bash
+ip -6 route show default    # vacío = NO anunciar ::/0
+```
+
+El exit node solo hace falta para salir a internet con la IP de casa (por
+ejemplo desde una wifi pública). Para llegar a los servicios del tailnet
+—Vaultwarden, Combina, openGym— **no se necesita**, y activarlo sin
+necesitarlo solo añade un salto y un modo de fallo.
+
 ---
 
 ## DNS
