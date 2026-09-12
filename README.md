@@ -58,7 +58,7 @@ flowchart LR
             api["Vault App API<br/>127.0.0.1:3000"]
             pg[("PostgreSQL 16<br/>sin puerto publicado")]
             og["openGym<br/>web + api<br/>127.0.0.1:8081"]
-            arm["Armario<br/>127.0.0.1:3001"]
+            arm["Combina<br/>127.0.0.1:3001"]
         end
     end
 
@@ -103,7 +103,7 @@ Detalle, flujos y redes de Docker en
 | **Vaultwarden** | Gestor de contraseñas familiar, compatible con los clientes de Bitwarden, sin cuota y sin bóveda en servidor ajeno | `https://<host>.<tailnet>.ts.net` |
 | **Vault App** | API propia de finanzas personales (Fastify + PostgreSQL) | `https://<host>.<tailnet>.ts.net:8443` |
 | **openGym** | Registro de entrenamientos y peso corporal para dos personas, sin suscripción y con el historial en casa | `https://<host>.<tailnet>.ts.net:8444` |
-| **Armario** | API de respaldo y sincronización de una aplicación Android de armario digital, con proxy a Gemini para etiquetar la ropa | `https://<host>.<tailnet>.ts.net:8445` |
+| **Combina** | API de respaldo y sincronización de una aplicación Android de armario digital, con proxy a Gemini para etiquetar la ropa | `https://<host>.<tailnet>.ts.net:8445` |
 | **Bot de Telegram** | Toda la observabilidad: alertas de CPU, RAM, disco, temperatura y servicios caídos | Telegram |
 | **Tailscale** | Red privada, terminación TLS y nodo de salida | — |
 | **Cockpit** | Panel de administración del host | `:9090` |
