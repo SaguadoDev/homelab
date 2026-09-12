@@ -199,7 +199,7 @@ tailnet, la aplicación no tira de caché.
 
 ---
 
-## Armario — API del armario digital
+## Combina — API del armario digital
 
 **Resuelve:** el respaldo y la sincronización de una aplicación Android de
 armario digital (dar de alta prendas con foto, componer conjuntos y

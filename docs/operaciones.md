@@ -15,7 +15,7 @@ comandos se ejecutan desde ese directorio.
 ├── vaultwarden/
 ├── vault_app/
 ├── opengym/
-├── armario/        <- el clon del repo de la app: aquí SÍ coinciden
+├── Combina/        <- el clon del repo de la app: aquí SÍ coinciden
 └── bot/
 ```
 
@@ -32,12 +32,12 @@ porque la variante de "copiar a mano" ya falló una vez — el repo llevaba
 meses con nombres de contenedor que no existían, y seguir el procedimiento al
 pie de la letra habría tumbado la vigilancia de Vault App.
 
-**Armario es la excepción**, y a propósito: su directorio de ejecución es el
+**Combina es la excepción**, y a propósito: su directorio de ejecución es el
 clon del repo de su propia aplicación, con el `docker-compose.yml`
 versionado ahí y el `.env`, `data/` y `logs/` ignorados por su `.gitignore`.
 Se llegó a eso después de probar lo contrario y acabar con dos copias del
 mismo compose que se desincronizaron a la primera. Lo que hay en
-`services/armario/` de este repo es una copia de referencia, saneada. Peaje
+`services/combina/` de este repo es una copia de referencia, saneada. Peaje
 del montaje: un `git clean -xfd` en ese clon se lleva las fotos y el `.env`.
 
 ---
@@ -313,7 +313,7 @@ vuelven enteros.
 
 ---
 
-## Armario
+## Combina
 
 ### Primera instalación
 
@@ -325,8 +325,8 @@ CREATE DATABASE armario OWNER armario_user;
 ```
 
 ```bash
-git clone <repo-de-la-app> ~/armario
-cd ~/armario
+git clone <repo-de-la-app> ~/Combina
+cd ~/Combina
 mkdir -p data/prendas logs
 cp .env.example .env        # DATABASE_URL, RED_DOCKER, JWT_SECRETO, GEMINI_API_KEY
 #   openssl rand -base64 48   para el JWT_SECRETO
@@ -357,7 +357,7 @@ instalar nada.
 ### Actualizar
 
 ```bash
-cd ~/armario
+cd ~/Combina
 git pull
 docker compose up -d --build
 docker compose logs -f armario-api

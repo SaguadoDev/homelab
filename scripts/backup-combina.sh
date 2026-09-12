@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Armario — copia diaria cifrada a Google Drive (CLAUDE.md §6b).
+# Combina — copia diaria cifrada a Google Drive (CLAUDE.md §6b).
 #
 # Mismo esquema que backup-vaultwarden.sh y backup-opengym.sh: staging ->
 # verificación -> tar.gz -> GPG -> Drive -> rotación a 7 días, y la rotación
@@ -62,13 +62,13 @@
 
 set -euo pipefail
 
-DIR_SERVICIO="${ARMARIO_DIR:-/home/homelab/Combina}"
+DIR_SERVICIO="${COMBINA_DIR:-/home/homelab/Combina}"
 DIR_IMAGENES="$DIR_SERVICIO/data/prendas"
-CONTENEDOR_PG="${ARMARIO_PG:-server-postgres-1}"
-BD="${ARMARIO_BD:-armario}"
-USUARIO_BD="${ARMARIO_BD_USER:-armario_user}"
-REMOTO="${ARMARIO_BACKUP_REMOTE:-gdrive:Armario_Backups}"
-RETENCION="${ARMARIO_BACKUP_RETENTION:-7d}"
+CONTENEDOR_PG="${COMBINA_PG:-server-postgres-1}"
+BD="${COMBINA_BD:-armario}"
+USUARIO_BD="${COMBINA_BD_USER:-armario_user}"
+REMOTO="${COMBINA_BACKUP_REMOTE:-gdrive:Armario_Backups}"
+RETENCION="${COMBINA_BACKUP_RETENTION:-7d}"
 PASSPHRASE_FILE="/home/homelab/.config/vault/backup-passphrase"
 
 # Explícito porque esto corre desde cron, donde no hay entorno de sesión: sin

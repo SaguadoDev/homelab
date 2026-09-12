@@ -19,7 +19,7 @@ Dos cosas a la vez, en el mismo proceso:
 | Comando | Qué devuelve |
 |---|---|
 | `/estado` | CPU, RAM, disco y temperatura, con barras de progreso |
-| `/servicios` | AdGuard, Vaultwarden, Vault App, openGym, Armario y Tailscale |
+| `/servicios` | AdGuard, Vaultwarden, Vault App, openGym, Combina y Tailscale |
 | `/uptime` | Tiempo activo del sistema |
 | `/red` | IP local y tráfico acumulado |
 | `/procesos` | Top 5 por CPU |
@@ -51,7 +51,7 @@ corran: se lee además el `health` de la API para distinguir "arrancando"
 de "corriendo pero sin responder", y se dice cuál de las dos piezas ha
 caído ("DB caída" frente a "API caída").
 
-**Armario tiene un estado propio para el fallo silencioso.** Su
+**Combina tiene un estado propio para el fallo silencioso.** Su
 `healthcheck` llama a un `/health` que comprueba la base de datos, no solo
 que el proceso responde, así que se distingue `Sin base de datos 🟡` de
 `Detenido 🔴` y los dos alertan. Es el caso que un `200 OK` a secas se

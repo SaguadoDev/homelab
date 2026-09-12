@@ -38,7 +38,7 @@ Queda:
 https://<host>.<tailnet>.ts.net        -> 127.0.0.1:8080   (Vaultwarden)
 https://<host>.<tailnet>.ts.net:8443   -> 127.0.0.1:3000   (API Vault App)
 https://<host>.<tailnet>.ts.net:8444   -> 127.0.0.1:8081   (openGym)
-https://<host>.<tailnet>.ts.net:8445   -> 127.0.0.1:3001   (API Armario)
+https://<host>.<tailnet>.ts.net:8445   -> 127.0.0.1:3001   (API Combina)
 ```
 
 Esa URL del 8445 **va compilada dentro del APK** de la aplicación del

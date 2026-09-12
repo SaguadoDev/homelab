@@ -1,6 +1,6 @@
-# API del armario (CLAUDE.md §6b).
+# API de Combina (CLAUDE.md §6b).
 #
-# Este fichero se copia a /home/<usuario>/armario/ en el m715q, junto con un
+# Este fichero se copia a /home/<usuario>/Combina/ en el m715q, junto con un
 # .env que NO está en git.
 #
 # Convenciones heredadas del homelab, obligatorias:

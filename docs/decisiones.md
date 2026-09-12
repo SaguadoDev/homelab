@@ -211,10 +211,10 @@ de ellos. Funciona —cada servicio filtra por su propio credential ID— pero
 hay que elegir a mano. Con dos servicios con passkeys es un roce; con seis
 sería motivo para replantearlo.
 
-## 11. Armario despliega desde el clon de su propio repositorio
+## 11. Combina despliega desde el clon de su propio repositorio
 
 **Alternativas:** un directorio de despliegue aparte, como los otros
-servicios (`~/armario/` con el compose copiado y los datos al lado).
+servicios (`~/combina/` con el compose copiado y los datos al lado).
 
 **Elegido:** el clon del repositorio de la aplicación **es** el directorio
 de ejecución. El `docker-compose.yml` está versionado ahí, y el `.env`,
@@ -237,7 +237,7 @@ de la usuaria y el `.env`, porque son justo lo que git ignora. Lo recupera
 la copia nocturna, pero se pierde lo del día. Está avisado en el README del
 servicio, que es donde se va a leer antes de escribir ese comando.
 
-## 12. Armario reutiliza la instancia de PostgreSQL, con rol y base propios
+## 12. Combina reutiliza la instancia de PostgreSQL, con rol y base propios
 
 **Alternativas:** un segundo contenedor de Postgres solo para este
 servicio.

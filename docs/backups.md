@@ -5,7 +5,7 @@ contraseñas, la base de datos financiera, el historial de entrenamientos y
 el armario digital. Cada uno tiene una red remota cifrada y corta; la base
 financiera tiene además una local, amplia y barata.
 
-| | Vaultwarden | Vault App | openGym | Armario |
+| | Vaultwarden | Vault App | openGym | Combina |
 |---|---|---|---|---|
 | Copia local | — | `pg_dump` a las 03:30, 30 días | — | — |
 | Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días | 05:30 → Drive, 7 días |
@@ -40,10 +40,10 @@ sudo crontab -e
 #   0 5 * * *  /home/homelab/opengym/backup-opengym.sh >> /var/log/backup-opengym.log 2>&1
 crontab -e
 #   30 4 * * * /home/homelab/homelab/scripts/backup-vault-app.sh >> ~/backups/backup-drive.log 2>&1
-#   30 5 * * * /home/homelab/armario/server/scripts/backup-armario.sh >> /home/homelab/armario/logs/backup.log 2>&1
+#   30 5 * * * /home/homelab/Combina/server/scripts/backup-combina.sh >> /home/homelab/Combina/logs/backup.log 2>&1
 ```
 
-**Armario va en el cron del usuario**, como Vault App: su bind mount de
+**Combina va en el cron del usuario**, como Vault App: su bind mount de
 imágenes es del usuario del servicio —el contenedor corre como `node`, uid
 1000— y el volcado sale por `docker exec`, para lo que basta con estar en el
 grupo `docker`. Su script vive en el repo de la aplicación, no en este, por
@@ -56,7 +56,7 @@ aborta en el primer `cp`. Vaultwarden está en el de root por lo mismo.
 
 Las 03:00, las 04:30, las 05:00 y las 05:30 están separadas a propósito, y
 las cuatro lejos del `pg_dump` interno de las 03:30, para que dos volcados no
-compitan por las mismas conexiones. Armario y Vault App comparten instancia
+compitan por las mismas conexiones. Combina y Vault App comparten instancia
 de Postgres, así que ahí la separación no es cortesía sino necesidad.
 
 ## Qué entra y qué no
@@ -89,7 +89,7 @@ Queda fuera `./media` (~140 MB de imágenes y GIFs de ejercicios): es
 contenido de terceros que el contenedor `opengym-media` vuelve a descargar
 solo en el primer arranque.
 
-**Armario** — `pg_dump --format=custom --no-owner` de la base `armario`, el
+**Combina** — `pg_dump --format=custom --no-owner` de la base `armario`, el
 directorio `data/prendas/` con los WebP, y el `docker-compose.yml` con su
 `.env`. El `.env` lleva la contraseña de Postgres y el secreto del JWT:
 restaurar sin el secreto no pierde datos —el refresh es opaco y se valida
@@ -157,7 +157,7 @@ cd opengym                                # data/, docker-compose.yml y .env
 docker compose up -d                      # `media` rehace ./media solo
 ```
 
-### Armario
+### Combina
 
 ```bash
 rclone copy gdrive:Armario_Backups/armario_FECHA.tar.gz.gpg .
@@ -231,7 +231,7 @@ Lo que hay que ver: `/api/health` devuelve `ok`, el número de perfiles
 cuadra y `data/secret` **no ha cambiado** tras arrancar — si el contenedor
 lo regenera es que no se restauró, y todas las sesiones abiertas se caen.
 
-**Armario, restaurado el 2 de septiembre de 2026.** Es hasta ahora el único
+**Combina, restaurado el 2 de septiembre de 2026.** Es hasta ahora el único
 que se ha probado de las dos formas que importan.
 
 La copia, a una base aparte para no tocar la buena:
