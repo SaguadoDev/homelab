@@ -53,7 +53,7 @@ flowchart LR
     subgraph host ["Servidor — Ubuntu 26.04"]
         bot["Bot de Telegram<br/>systemd"]
         subgraph docker ["Docker"]
-            adg["AdGuard Home<br/>network_mode host<br/>:53 · :80"]
+            adg["AdGuard Home<br/>network_mode host<br/>:53 LAN + tailnet · :80"]
             vw["Vaultwarden<br/>127.0.0.1:8080"]
             api["Vault App API<br/>127.0.0.1:3000"]
             pg[("PostgreSQL 16<br/>sin puerto publicado")]
@@ -73,6 +73,7 @@ flowchart LR
     movil -.->|"exit node"| tsd
     router -.-> disp
     disp -->|"DNS :53"| adg
+    movil -->|"DNS :53"| adg
     tsd -->|":443"| vw
     tsd -->|":8443"| api
     tsd -->|":8444"| og
@@ -98,7 +99,7 @@ Detalle, flujos y redes de Docker en
 
 | Servicio | Qué resuelve | Acceso |
 |---|---|---|
-| **AdGuard Home** | DNS con filtrado de publicidad y telemetría para toda la casa, en el router y no en cada dispositivo | `:53` en la LAN · web en `:80` |
+| **AdGuard Home** | DNS con filtrado de publicidad y telemetría para toda la casa, en el router y no en cada dispositivo; también DNS del tailnet, así que sigue filtrando fuera de casa | `:53` en la LAN y en el tailnet · web en `:80` |
 | **Vaultwarden** | Gestor de contraseñas familiar, compatible con los clientes de Bitwarden, sin cuota y sin bóveda en servidor ajeno | `https://<host>.<tailnet>.ts.net` |
 | **Vault App** | API propia de finanzas personales (Fastify + PostgreSQL) | `https://<host>.<tailnet>.ts.net:8443` |
 | **openGym** | Registro de entrenamientos y peso corporal para dos personas, sin suscripción y con el historial en casa | `https://<host>.<tailnet>.ts.net:8444` |

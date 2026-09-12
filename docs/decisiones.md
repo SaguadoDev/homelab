@@ -254,3 +254,48 @@ importa —que un servicio no lea los datos del otro— ya está.
 los dos servicios a la vez. Se acepta porque las copias se lanzan por
 separado y a horas distintas (04:30 y 05:30), y porque el fallo compartido
 que de verdad da miedo —que no haya SAI— no lo arregla tener dos motores.
+
+## 13. AdGuard como DNS del tailnet, no solo de la LAN
+
+**Alternativas:** dejar el tailnet sin DNS propio (lo que había); *Private
+DNS* de Android apuntando a un DoT publicado con `tailscale serve
+--tls-terminated-tcp=853`; exit node más el DNS del host apuntando a AdGuard.
+
+**Elegido:** `<IP_TAILSCALE>` como *nameserver* global del tailnet, con
+*Override local DNS*, y AdGuard escuchando también en esa IP.
+
+El tailnet no tenía resolutor configurado: solo split DNS para `*.ts.net`.
+Un dispositivo con Tailscale activo usaba el DNS de la red en la que
+estuviera —en casa el router, luego AdGuard; con datos móviles, el de la
+operadora, luego anuncios—. Y aunque el tailnet hubiera apuntado al
+servidor, AdGuard no atendía: `bind_hosts` era solo la IP de LAN. Se
+comprobó con `dig @<IP_TAILSCALE>`: *connection refused*.
+
+Con el cambio, todo dispositivo del tailnet resuelve contra AdGuard esté
+donde esté, y AdGuard lo ve con su IP `100.x`, así que las estadísticas
+por cliente siguen funcionando fuera de casa. Con Tailscale apagado nada
+cambia: el dispositivo vuelve al DNS de la red.
+
+**Por qué no las otras.** *Private DNS* arregla un móvil cada vez, y en
+modo estricto deja el dispositivo sin internet si el servidor no responde.
+El exit node obliga a enrutar todo el tráfico por casa y a deshacer la
+[decisión §2](#2-el-dns-del-host-apunta-a-1111-no-a-adguard).
+
+**Lo que se paga.**
+
+- Si el servidor cae, cualquier dispositivo con Tailscale activo se queda
+  sin DNS. No hay respaldo posible: tailscaled consulta a todos los
+  *nameservers* globales en paralelo y se queda con la primera respuesta,
+  así que un segundo resolutor público no sería un respaldo sino una
+  fuga que se saltaría el filtro a ratos. Es un solo *nameserver* o nada.
+- `bind_hosts` gana una IP que no existe hasta que tailscaled levanta
+  `tailscale0`. Si Docker arranca antes, AdGuard no puede bindear y sale.
+  Por eso `docker.service` lleva un *drop-in* con `After=tailscaled.service`
+  (`systemd/docker-after-tailscaled.conf`, enlazado en
+  `/etc/systemd/system/docker.service.d/`). tailscaled configura la
+  interfaz desde su estado guardado antes de hablar con el servidor de
+  control, así que la ventana es corta; y si aun así AdGuard llegara antes,
+  `restart: unless-stopped` lo reintenta hasta que la IP existe.
+- Sigue sin ser `0.0.0.0`: son dos IPs concretas. La restricción de la
+  incidencia 9 no cambia.
+

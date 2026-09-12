@@ -23,9 +23,11 @@ El repo **no** es el directorio de ejecución: aquí está la configuración
 sin datos ni secretos. Al cambiar algo, se edita en el repo y se copia al
 directorio de ejecución (o al revés, y se hace commit).
 
-**Excepción: la unidad del bot.** `/etc/systemd/system/server-bot.service`
-es un *symlink* a `systemd/server-bot.service` de este repo, así que no hay
-copia que sincronizar: se edita aquí y basta un `daemon-reload`. Se hizo así
+**Excepción: la unidad del bot y el *drop-in* de Docker.**
+`/etc/systemd/system/server-bot.service` y
+`/etc/systemd/system/docker.service.d/after-tailscaled.conf` son *symlinks*
+a `systemd/` de este repo, así que no hay copia que sincronizar: se edita
+aquí y basta un `daemon-reload`. Se hizo así
 porque la variante de "copiar a mano" ya falló una vez — el repo llevaba
 meses con nombres de contenedor que no existían, y seguir el procedimiento al
 pie de la letra habría tumbado la vigilancia de Vault App.
@@ -143,14 +145,24 @@ dig @<IP_LAN> ejemplo.com +short
 # ¿Y los nombres del tailnet? (regla split-DNS)
 dig @<IP_LAN> <host>.<tailnet>.ts.net +short
 
+# ¿Atiende también por el tailnet? (es el DNS global de la consola de Tailscale)
+dig @<IP_TAILSCALE> ejemplo.com +short
+
 # El host NO usa AdGuard, a propósito
 resolvectl status | grep -A2 "Current DNS Server"
 ```
 
 Interfaz web de AdGuard: `http://<IP_LAN>` (puerto 80).
 
-Si AdGuard se cae, la casa se queda sin DNS. El servidor no: resuelve por
-1.1.1.1. Desde él se puede diagnosticar y levantar el contenedor.
+Si AdGuard se cae, la casa se queda sin DNS, y también cualquier
+dispositivo con Tailscale activo, esté donde esté. El servidor no: resuelve
+por 1.1.1.1. Desde él se puede diagnosticar y levantar el contenedor.
+
+Si tras un reinicio AdGuard sale con `bind: cannot assign requested
+address` sobre `<IP_TAILSCALE>`, es que arrancó antes de que tailscaled
+levantara la interfaz. Docker lleva un *drop-in* `After=tailscaled.service`
+para evitarlo (`systemd/docker-after-tailscaled.conf`); comprobar que sigue
+enlazado en `/etc/systemd/system/docker.service.d/`.
 
 ---
 

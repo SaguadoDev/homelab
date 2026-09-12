@@ -38,7 +38,7 @@ flowchart LR
     subgraph host ["Servidor — Ubuntu 26.04"]
         bot["Bot de Telegram<br/>systemd"]
         subgraph docker ["Docker"]
-            adg["AdGuard Home<br/>network_mode host<br/>:53 · :80"]
+            adg["AdGuard Home<br/>network_mode host<br/>:53 LAN + tailnet · :80"]
             vw["Vaultwarden<br/>127.0.0.1:8080"]
             api["Vault App API<br/>127.0.0.1:3000"]
             pg[("PostgreSQL 16<br/>sin puerto publicado")]
@@ -56,6 +56,7 @@ flowchart LR
     movil -.->|"exit node"| tsd
     router -.-> disp
     disp -->|"DNS :53"| adg
+    movil -->|"DNS :53"| adg
     tsd -->|":443"| vw
     tsd -->|":8443"| api
     tsd -->|":8444"| og
@@ -75,7 +76,9 @@ Solo el primero atraviesa la frontera de casa.
 **1. Desde fuera — Tailscale.** El móvil se conecta al tailnet y llega a
 `https://<host>.<tailnet>.ts.net`. TLS real, sin puertos abiertos en el
 router, sin DNS dinámico, sin túnel de terceros. Si el dispositivo no
-está en el tailnet, el servidor no existe para él.
+está en el tailnet, el servidor no existe para él. El tailnet además
+anuncia `<IP_TAILSCALE>` como DNS global, así que el mismo móvil resuelve
+contra AdGuard con datos móviles o en una wifi ajena.
 
 **2. Desde la red local — DNS.** El router reparte por DHCP la IP del
 servidor como DNS. Todos los dispositivos de casa resuelven contra
@@ -96,7 +99,7 @@ además habría chocado con el 8080 que ya ocupa la bóveda.
 
 ```mermaid
 sequenceDiagram
-    participant D as Dispositivo LAN
+    participant D as Dispositivo LAN o del tailnet
     participant A as AdGuard en el 53
     participant T as MagicDNS 100.100.100.100
     participant U as Quad9 y Cloudflare por DoH
@@ -119,6 +122,11 @@ La regla `[/ts.net/]100.100.100.100` es la que hace que los nombres
 MagicDNS funcionen también para los clientes que usan AdGuard como DNS.
 Sin ella, un dispositivo de la LAN resuelve todo internet pero no
 encuentra el propio servidor por su nombre de tailnet.
+
+El flujo es el mismo para un dispositivo de la LAN (llega por
+`192.168.1.50`) y para uno del tailnet (llega por `<IP_TAILSCALE>`, que
+la consola de Tailscale reparte como DNS global). AdGuard escucha en las
+dos IPs y ve la de origen real en ambos casos.
 
 ## Redes de Docker
 
