@@ -286,7 +286,7 @@ que comprobar es que el host y la LAN resuelven por caminos distintos:
 ```bash
 dig +short @192.168.1.50 doubleclick.net   # 0.0.0.0  -> la LAN pasa por el filtro
 resolvectl query doubleclick.net           # IP real  -> el host no
-resolvectl status tailscale0               # 100.100.100.100 solo para tail587adf.ts.net
+resolvectl status tailscale0               # 100.100.100.100 solo para <tailnet>.ts.net
 ```
 
 **Daño colateral: los contenedores se quedaron sin DNS.** El arreglo dejó al
