@@ -5,23 +5,28 @@
 # Lo que tiene que ver quien lo ejecuta (docs/recuperacion.md):
 #
 #   1. Instalar Ubuntu 26.04 con usuario `server` y hostname `server`.
-#   2. git clone https://github.com/SaguadoDev/homelab
-#      sudo bash homelab/scripts/restaurar-servidor.sh --kit /media/server/KIT
-#   3. Cuando lo pida: la passphrase (del papel), rclone.conf (del USB) y el
-#      token de GitHub para los dos repos privados. Nada más se teclea.
+#   2. Con el navegador, de la carpeta Sistema_Backups de Drive a ~/kit: el
+#      sistema_*.tar.gz.gpg más reciente y los repos/*.bundle.gpg.
+#   3. git clone https://github.com/SaguadoDev/homelab   (o del bundle)
+#      sudo bash homelab/scripts/restaurar-servidor.sh --kit ~/kit
+#      Pide la passphrase (del papel) y nada más.
 #   4. Si cambió la máquina: reserva DHCP en el router para la MAC nueva.
 #
-# Todo lo demás —.env, composes, cron, AdGuard, la identidad de Tailscale con
-# su IP y sus `serve`, la red del host— sale del tar de `backup-sistema.sh`,
-# y los datos, de las cuatro copias de siempre.
+# Todo lo demás —rclone.conf, .env, composes, cron, AdGuard, la identidad de
+# Tailscale con su IP y sus `serve`, la red del host— sale del tar de
+# `backup-sistema.sh`; los repos, de los bundles; y los datos, de las cuatro
+# copias de siempre. Sin kit local también funciona: con rclone.conf a mano
+# (o `rclone config`) lo baja todo de Drive, y los repos privados de GitHub
+# con un token si no hay bundle.
 #
 # Doce fases, en orden, idempotentes: cada una comprueba el estado antes de
 # actuar y se puede relanzar. `--desde N` retoma desde una fase (por ejemplo
 # tras perder la sesión SSH cuando la IP fija entra en vigor en la fase 3).
 #
 # Flags:
-#   --kit DIR          directorio con backup-passphrase, rclone.conf,
-#                      github-token (opcional) y sistema_*.tar.gz.gpg (opcional)
+#   --kit DIR          directorio con lo bajado de Drive: sistema_*.tar.gz.gpg
+#                      y repos/*.bundle.gpg (o *.bundle.gpg sueltos). Opcionales:
+#                      backup-passphrase, rclone.conf, github-token
 #   --tar FICHERO      tar del sistema concreto en vez del último de Drive
 #   --desde N          empezar en la fase N
 #   --solo N           ejecutar solo la fase N
@@ -51,6 +56,7 @@ REMOTE_VAULT="gdrive:Vault_Backups"
 REMOTE_OG="gdrive:openGym_Backups"
 REMOTE_ARM="gdrive:Armario_Backups"
 TRABAJO="/root/restauracion"                    # tar descifrado y descargas; se borra en la fase 12
+BUNDLES="/tmp/restauracion-bundles"             # bundles descifrados (código, no secretos); el usuario los clona
 SIS="$TRABAJO/sistema"
 PASSPHRASE_FILE="$HOME_USR/.config/vault/backup-passphrase"
 RCLONE_CONF="$HOME_USR/.config/rclone/rclone.conf"
@@ -163,7 +169,7 @@ fi
 
 # ═════════════════════════════════════════════════════════════════════════
 if toca_fase 2; then fase 2 "Kit y tar del sistema"
-  # Passphrase
+  # Passphrase: la única pieza que no puede venir de ninguna copia.
   if [ ! -s "$PASSPHRASE_FILE" ]; then
     install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$HOME_USR/.config/vault"
     if [ -n "$KIT" ] && [ -s "$KIT/backup-passphrase" ]; then
@@ -175,41 +181,33 @@ if toca_fase 2; then fase 2 "Kit y tar del sistema"
     fi
   fi
   ok "passphrase en $PASSPHRASE_FILE"
-  # rclone.conf
-  if [ ! -s "$RCLONE_CONF" ]; then
+
+  # rclone.conf del kit, si lo hay. Si no, saldrá del propio tar del sistema.
+  if [ ! -s "$RCLONE_CONF" ] && [ -n "$KIT" ] && [ -s "$KIT/rclone.conf" ]; then
     install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$HOME_USR/.config/rclone"
-    if [ -n "$KIT" ] && [ -s "$KIT/rclone.conf" ]; then
-      install -m 600 -o "$USUARIO" -g "$USUARIO" "$KIT/rclone.conf" "$RCLONE_CONF"
-    else
-      read -r -p "Ruta a rclone.conf (vacío = rehacerlo con rclone config): " RUTA
-      if [ -n "$RUTA" ]; then
-        install -m 600 -o "$USUARIO" -g "$USUARIO" "$RUTA" "$RCLONE_CONF"
-      else
-        echo "Remoto: nombre gdrive, tipo drive, scope drive.file, y el MISMO client_id/client_secret del proyecto de Google Cloud (docs/recuperacion.md)."
-        como_usuario rclone config
-      fi
-    fi
+    install -m 600 -o "$USUARIO" -g "$USUARIO" "$KIT/rclone.conf" "$RCLONE_CONF"
   fi
-  rclone lsd gdrive: >/dev/null || fallo "rclone no llega a gdrive: — revisar rclone.conf"
-  ok "rclone ve gdrive: ($(rclone lsd gdrive: | wc -l) carpetas)"
-  # Token de GitHub (solo hace falta si se clona de GitHub)
-  if [ -z "$REPOS_DESDE" ] && [ ! -s "$TRABAJO/github-token" ]; then
-    if [ -n "$KIT" ] && [ -s "$KIT/github-token" ]; then
-      install -m 600 "$KIT/github-token" "$TRABAJO/github-token"
-    else
-      read -r -s -p "Token de GitHub con lectura de vault_app y Combina: " TK; echo
-      printf '%s' "$TK" > "$TRABAJO/github-token"; chmod 600 "$TRABAJO/github-token"; unset TK
-    fi
-  fi
-  # Tar del sistema
+
+  # Tar del sistema: --tar, el del kit, o el último de Drive.
   if [ ! -f "$SIS/SHA256SUMS" ]; then
     rm -rf "$SIS"; mkdir -p "$SIS"
+    GPG_IN=""
     if [ -n "$TAR_SISTEMA" ]; then
       GPG_IN="$TAR_SISTEMA"
-    elif [ -n "$KIT" ] && ls "$KIT"/sistema_*.tar.gz.gpg >/dev/null 2>&1 && ! rclone lsd "$REMOTE_SISTEMA" >/dev/null 2>&1; then
+    elif [ -n "$KIT" ] && ls "$KIT"/sistema_*.tar.gz.gpg >/dev/null 2>&1; then
       GPG_IN=$(ls "$KIT"/sistema_*.tar.gz.gpg | sort | tail -1)
-      log "[WARN] Drive no responde; se usa el tar del kit: $GPG_IN"
-    else
+    fi
+    if [ -z "$GPG_IN" ]; then
+      if [ ! -s "$RCLONE_CONF" ]; then
+        install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$HOME_USR/.config/rclone"
+        read -r -p "No hay tar local ni rclone.conf. Ruta a rclone.conf (vacío = rclone config): " RUTA
+        if [ -n "$RUTA" ]; then
+          install -m 600 -o "$USUARIO" -g "$USUARIO" "$RUTA" "$RCLONE_CONF"
+        else
+          echo "Remoto: nombre gdrive, tipo drive, scope drive.file, y el MISMO client_id/client_secret del proyecto de Google Cloud (docs/recuperacion.md)."
+          como_usuario rclone config
+        fi
+      fi
       NOMBRE=$(ultimo_remoto "$REMOTE_SISTEMA" sistema_)
       [ -n "$NOMBRE" ] || fallo "no hay ningún sistema_*.tar.gz.gpg en $REMOTE_SISTEMA"
       rclone copy "$REMOTE_SISTEMA/$NOMBRE" "$TRABAJO/"
@@ -223,6 +221,16 @@ if toca_fase 2; then fase 2 "Kit y tar del sistema"
   else
     ok "tar del sistema ya extraído en $SIS"
   fi
+
+  # rclone.conf del tar, si aún no hay: es lo que hace que el kit sea solo
+  # "passphrase + lo bajado de Drive con el navegador".
+  if [ ! -s "$RCLONE_CONF" ] && [ -s "$SIS/home/.config/rclone/rclone.conf" ]; then
+    install -d -m 700 -o "$USUARIO" -g "$USUARIO" "$HOME_USR/.config/rclone"
+    install -m 600 -o "$USUARIO" -g "$USUARIO" "$SIS/home/.config/rclone/rclone.conf" "$RCLONE_CONF"
+    ok "rclone.conf sacado del tar del sistema"
+  fi
+  rclone lsd gdrive: >/dev/null || fallo "rclone no llega a gdrive: — revisar rclone.conf"
+  ok "rclone ve gdrive: ($(rclone lsd gdrive: | wc -l) carpetas)"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -273,20 +281,58 @@ fi
 # ═════════════════════════════════════════════════════════════════════════
 if toca_fase 4; then fase 4 "Repos, home, secretos, bot"
   [ -d "$SIS/home" ] || fallo "falta $SIS/home: ejecutar la fase 2"
+  bundle_local() { # bundle_local nombre → ruta a un bundle descifrado, o nada
+    local nombre="$1" gpg_in=""
+    if [ -n "$KIT" ]; then
+      gpg_in=$(ls "$KIT"/repos/"$nombre"-*.bundle.gpg "$KIT"/"$nombre"-*.bundle.gpg 2>/dev/null | sort | tail -1 || true)
+    fi
+    if [ -z "$gpg_in" ]; then
+      local remoto; remoto=$(ultimo_remoto "$REMOTE_SISTEMA/repos" "$nombre-" 2>/dev/null || true)
+      if [ -n "$remoto" ]; then
+        rclone copy "$REMOTE_SISTEMA/repos/$remoto" "$TRABAJO/" && gpg_in="$TRABAJO/$remoto"
+      fi
+    fi
+    [ -n "$gpg_in" ] || return 0
+    # Fuera de $TRABAJO (0700 de root): el clone lo hace el usuario. Un bundle
+    # es código, no un secreto.
+    [ -d "$BUNDLES" ] || { mkdir -p "$BUNDLES"; chmod 755 "$BUNDLES"; }
+    descifrar "$gpg_in" "$BUNDLES/$nombre.bundle"
+    chmod 644 "$BUNDLES/$nombre.bundle"
+    echo "$BUNDLES/$nombre.bundle"
+  }
   clonar() { # clonar nombre url destino
-    local nombre="$1" url="$2" dest="$3"
+    local nombre="$1" url="$2" dest="$3" bundle
     if [ -d "$dest/.git" ]; then ok "$nombre ya clonado"; return; fi
     if [ -n "$REPOS_DESDE" ]; then
       # Clones montados desde fuera (ensayo): git se niega si el dueño no es
       # quien clona; aquí es un origen de solo lectura y da igual.
       como_usuario git -c safe.directory='*' clone -q "$REPOS_DESDE/$nombre" "$dest"
-    elif [ "$nombre" = homelab ]; then
+      ok "$nombre clonado desde $REPOS_DESDE"
+      return
+    fi
+    # Primero el bundle (kit o Drive): no necesita GitHub ni token.
+    bundle=$(bundle_local "$nombre")
+    if [ -n "$bundle" ]; then
+      como_usuario git clone -q "$bundle" "$dest"
+      como_usuario git -C "$dest" remote set-url origin "$url"
+      ok "$nombre clonado desde el bundle ($(como_usuario git -C "$dest" rev-parse --short HEAD))"
+      return
+    fi
+    if [ "$nombre" = homelab ]; then
       como_usuario git clone -q "$url" "$dest"
     else
+      if [ ! -s "$TRABAJO/github-token" ]; then
+        if [ -n "$KIT" ] && [ -s "$KIT/github-token" ]; then
+          install -m 600 "$KIT/github-token" "$TRABAJO/github-token"
+        else
+          read -r -s -p "Sin bundle de $nombre. Token de GitHub con lectura de vault_app y Combina: " TK; echo
+          printf '%s' "$TK" > "$TRABAJO/github-token"; chmod 600 "$TRABAJO/github-token"; unset TK
+        fi
+      fi
       como_usuario git -c credential.helper="!f() { echo username=x-access-token; echo password=$(cat "$TRABAJO/github-token"); }; f" \
         clone -q "$url" "$dest"
     fi
-    ok "$nombre clonado en $dest"
+    ok "$nombre clonado desde GitHub"
   }
   clonar homelab   "$REPO_URL_HOMELAB"   "$HOME_USR/homelab"
   clonar vault_app "$REPO_URL_VAULT_APP" "$HOME_USR/vault_app"
@@ -583,7 +629,7 @@ if toca_fase 12; then fase 12 "Verificación"
       como_usuario bash "$s" 2>&1 | tail -1 | sed 's/^/     /'
     done
   fi
-  rm -rf "$TRABAJO"
+  rm -rf "$TRABAJO" "$BUNDLES"
   ok "directorio de trabajo $TRABAJO borrado (llevaba los secretos descifrados)"
   cat <<FIN
 

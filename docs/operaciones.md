@@ -448,11 +448,10 @@ mañana siguiente, `/copias` en el bot: las cinco tienen que haber llegado.
 
 Disco muerto, máquina muerta, o un `rm` donde no tocaba: el procedimiento
 entero está en [recuperacion.md](recuperacion.md). Resumen: Ubuntu limpia,
+bajar de Drive con el navegador el tar del sistema y los bundles a `~/kit`,
 `git clone` de este repo, `sudo bash scripts/restaurar-servidor.sh --kit
-<USB>`, y los tres secretos del kit cuando los pida.
-
-Para mantener el kit al día: `scripts/kit-usb.sh /ruta/al/usb`, y como
-mínimo cada tres meses.
+~/kit`, y la passphrase cuando la pida. No hay más kit que mantener: lo
+sube `backup-sistema.sh` cada noche.
 
 ---
 

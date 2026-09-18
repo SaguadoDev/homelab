@@ -133,7 +133,11 @@ como corren** (no la versión saneada del repo), la red del host (netplan,
 resolved, `daemon.json`, sysctl), las claves SSH del host, `rclone.conf`,
 dotfiles y la memoria de Claude Code; más un manifiesto (paquetes, snaps,
 imágenes con digest, estado de Tailscale) y `SHA256SUMS`. Unos 300 KB.
-Corre en el cron de root porque casi todo eso es 0600 de root.
+Corre en el cron de root porque casi todo eso es 0600 de root. En la misma
+carpeta deja `repos/<nombre>-<hash>.bundle.gpg` (los tres repos enteros,
+cifrados, renovados solo cuando cambia `HEAD`, ~3 MB) y un `LEEME.txt`:
+con eso la restauración no necesita GitHub ni ningún token, solo la
+passphrase y la cuenta de Google.
 
 Antes de esto, AdGuard y tailscaled se daban por "rehacibles en minutos".
 Dejó de ser verdad con la [decisión §13](decisiones.md#13-adguard-como-dns-del-tailnet-no-solo-de-la-lan):
@@ -309,6 +313,7 @@ gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
 - **Las restauraciones de datos se prueban a mano.** Debería ser un script
   mensual que levante, verifique y avise por el bot. El ensayo del sistema
   en VM cubre las cinco de una vez, pero también se lanza a mano.
-- **Todo depende de una cuenta de Google.** El USB del kit lleva el último
-  tar del sistema, pero no los datos: falta una tercera copia de los datos
-  en un disco externo que se conecte de vez en cuando.
+- **Todo depende de una cuenta de Google.** Datos, sistema y repos están
+  en Drive y solo en Drive (y los repos, además, en GitHub). Falta una
+  tercera copia en un disco externo que se conecte de vez en cuando: ya va
+  todo cifrado, así que bastaría un `rclone sync gdrive: /media/disco`.

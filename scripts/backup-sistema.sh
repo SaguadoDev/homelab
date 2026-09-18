@@ -35,6 +35,16 @@
 #
 # Tamaño esperado: 100–300 KB. Mínimo para dar la copia por buena: 20 KB.
 #
+# Además del tar, en la misma carpeta de Drive:
+#   repos/<nombre>-<hash>.bundle.gpg   git bundle de homelab, vault_app y Combina,
+#                                      cifrado, renovado solo cuando cambia HEAD.
+#                                      Con esto la restauración no necesita
+#                                      GitHub ni ningún token: todo el kit es
+#                                      "la passphrase en papel + la cuenta de
+#                                      Google".
+#   LEEME.txt                          los cuatro pasos, para quien abra la
+#                                      carpeta dentro de tres años.
+#
 # Restaurar (a mano; lo normal es dejar que lo haga restaurar-servidor.sh):
 #   rclone copy gdrive:Sistema_Backups/sistema_FECHA.tar.gz.gpg .
 #   gpg --batch --passphrase-file /home/server/.config/vault/backup-passphrase \
@@ -251,5 +261,52 @@ if [ "$(date +%d)" = "01" ]; then
   rclone delete "$REMOTE_RCLONE/mensual/" --min-age "$RETENCION_MENSUAL"
   log "[INFO] Copia mensual subida; mensuales en el remoto: $(rclone lsf "$REMOTE_RCLONE/mensual/" | wc -l)"
 fi
+
+# ── repos como git bundle ────────────────────────────────────────────────
+# Los tres repos enteros (historia incluida), cifrados, solo cuando HEAD ha
+# cambiado desde la última subida. Son ~3 MB en total. vault_app y Combina
+# son privados en GitHub: sin esto, restaurar exigiría un token que habría
+# que guardar en algún sitio; con esto, la única llave es la passphrase.
+EXISTENTES=$(rclone lsf "$REMOTE_RCLONE/repos/" 2>/dev/null || true)
+for repo in homelab vault_app Combina; do
+  DIR="$HOME_USR/$repo"
+  [ -d "$DIR/.git" ] || { log "[WARN] $DIR no es un repo; se omite"; continue; }
+  HASH=$(git -c safe.directory='*' -C "$DIR" rev-parse --short=12 HEAD)
+  NOMBRE="$repo-$HASH.bundle.gpg"
+  if echo "$EXISTENTES" | grep -qx "$NOMBRE"; then
+    continue
+  fi
+  git -c safe.directory='*' -C "$DIR" bundle create -q "$TMP_DIR/$repo.bundle" --all
+  gpg --batch --quiet --yes --symmetric --cipher-algo AES256 \
+      --passphrase-file "$PASSPHRASE_FILE" --output "$TMP_DIR/$NOMBRE" "$TMP_DIR/$repo.bundle"
+  rclone copy "$TMP_DIR/$NOMBRE" "$REMOTE_RCLONE/repos/"
+  # Borrar las versiones anteriores de este repo, solo tras subir la nueva.
+  # (grep sin coincidencias devuelve 1 y con pipefail tumbaría el script.)
+  VIEJOS=$(echo "$EXISTENTES" | grep -E "^$repo-[0-9a-f]+\.bundle\.gpg$" | grep -vx "$NOMBRE" || true)
+  for viejo in $VIEJOS; do rclone deletefile "$REMOTE_RCLONE/repos/$viejo"; done
+  log "[INFO] repos/$NOMBRE subido ($(( $(stat -c %s "$TMP_DIR/$NOMBRE") / 1024 )) KB)"
+done
+
+# ── LEEME ────────────────────────────────────────────────────────────────
+cat > "$TMP_DIR/LEEME.txt" <<'LEEME'
+Copias del sistema del servidor de casa. Para volver a montarlo entero
+hace falta SOLO la passphrase (en papel) y esta carpeta.
+
+1. Instalar Ubuntu 26.04 con usuario `server` y hostname `server`.
+2. Descargar desde esta carpeta (drive.google.com, con el navegador) a
+   una carpeta ~/kit de la máquina nueva:
+     - el sistema_FECHA.tar.gz.gpg más reciente
+     - repos/homelab-*.bundle.gpg, repos/vault_app-*.bundle.gpg,
+       repos/Combina-*.bundle.gpg
+3. Sacar el script (o `git clone https://github.com/SaguadoDev/homelab`):
+     gpg -d ~/kit/homelab-*.bundle.gpg > ~/kit/homelab.bundle
+     git clone ~/kit/homelab.bundle ~/homelab
+4. sudo bash ~/homelab/scripts/restaurar-servidor.sh --kit ~/kit
+   Pide la passphrase y nada más. Al acabar: reserva DHCP en el router
+   para la MAC nueva si cambió la máquina.
+
+Todo lo demás está en docs/recuperacion.md del repo homelab.
+LEEME
+rclone copy "$TMP_DIR/LEEME.txt" "$REMOTE_RCLONE/"
 
 log "[INFO] Copia finalizada."

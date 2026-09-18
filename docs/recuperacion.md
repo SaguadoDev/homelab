@@ -11,43 +11,55 @@ Plan original con el inventario completo: [plan-recuperacion.md](plan-recuperaci
 
 ## Con el servidor muerto
 
-Hace falta el **kit** (más abajo): el papel con la passphrase y el USB.
+Hace falta **la passphrase** (el papel) y **la cuenta de Google**. Nada más.
 
 ```
 1. Instalar Ubuntu 26.04 (Desktop o Server, da igual) con usuario `server`
    y hostname `server`. Cable de red.
 
-2. git clone https://github.com/SaguadoDev/homelab
-   sudo bash homelab/scripts/restaurar-servidor.sh --kit /media/server/KIT
+2. Con el navegador, en drive.google.com, carpeta Sistema_Backups: bajar a
+   ~/kit el sistema_FECHA.tar.gz.gpg más reciente y los tres
+   repos/*.bundle.gpg. (Hay un LEEME.txt en la carpeta con estos pasos.)
 
-   (sin USB: sin --kit; el script pide la passphrase, la ruta a rclone.conf
-    o lanza `rclone config`, y el token de GitHub)
+3. git clone https://github.com/SaguadoDev/homelab
+   sudo bash homelab/scripts/restaurar-servidor.sh --kit ~/kit
 
-3. Si estás por SSH, en la fase 3 entra en vigor la IP fija y la sesión se
+   Pide la passphrase y no vuelve a preguntar nada: rclone.conf viene
+   dentro del tar, los repos de los bundles, los datos de Drive.
+   (Si GitHub no está: gpg -d ~/kit/homelab-*.bundle.gpg > homelab.bundle
+    && git clone homelab.bundle homelab.)
+
+4. Si estás por SSH, en la fase 3 entra en vigor la IP fija y la sesión se
    corta: vuelve a entrar en 192.168.1.50 y relanza con `--desde 4`.
 
-4. Si cambió la máquina (MAC nueva): reserva DHCP de 192.168.1.50 en el
+5. Si cambió la máquina (MAC nueva): reserva DHCP de 192.168.1.50 en el
    router. El DNS de la LAN ya apunta ahí.
 ```
+
+Sin nada bajado a mano también funciona: sin `--kit`, el script pide la
+passphrase, una ruta a `rclone.conf` (o lanza `rclone config`) y baja de
+Drive el tar y los bundles él mismo. El token de GitHub solo se pide si no
+hay bundle de un repo privado.
 
 Unos 20–40 minutos, casi todo construyendo las imágenes de Vault App y
 Combina y bajando la media de openGym. El script deja un log en
 `~/restauracion-FECHA.log` e imprime al final la lista de lo que queda
 fuera del servidor.
 
-**Nada se teclea salvo los tres secretos del kit.** Los `.env`, los
+**Nada se teclea salvo la passphrase.** `rclone.conf`, los `.env`, los
 composes, el cron, la configuración de AdGuard y la identidad de Tailscale
-vienen del tar del sistema; los datos, de las cuatro copias de siempre.
-Si el script pide algo más, es un fallo del script.
+vienen del tar del sistema; el código, de los bundles; los datos, de las
+cuatro copias de siempre. Si el script pide algo más, es un fallo del
+script.
 
 ### Lo que hace, fase a fase
 
 | # | Fase | De dónde sale |
 |---|---|---|
 | 1 | Paquetes: Docker, Tailscale, rclone, gnupg, sqlite3, dig, jq, cockpit, pcp | apt |
-| 2 | Passphrase y `rclone.conf` en su sitio; baja y descifra el último `sistema_*.tar.gz.gpg`; verifica `SHA256SUMS` | kit + `Sistema_Backups` |
+| 2 | Passphrase en su sitio; descifra el tar del kit (o baja el último de Drive); verifica `SHA256SUMS`; saca `rclone.conf` del tar | kit + `Sistema_Backups` |
 | 3 | `/etc`: resolved (host → 1.1.1.1), `daemon.json`, sysctl del exit node, claves SSH del host, gdm3, hostname, netplan con la IP fija | tar del sistema |
-| 4 | Clona `homelab`, `vault_app`, `Combina`; coloca composes vivos, `.env`, scripts de backup, `rclone.conf`, dotfiles, memoria de Claude, `~/adguard/conf`; crea `~/bot` con su venv | GitHub + tar |
+| 4 | Clona `homelab`, `vault_app`, `Combina` desde los bundles (kit, o `Sistema_Backups/repos/`; GitHub solo si no hay); coloca composes vivos, `.env`, scripts de backup, dotfiles, memoria de Claude, `~/adguard/conf`; crea `~/bot` con su venv | bundles + tar |
 | 5 | Restaura `tailscaled.state`: misma IP, mismo nombre, mismos `serve`, sin login. Aborta si el nodo no se llama `server` | tar |
 | 6 | AdGuard con el drop-in `After=tailscaled`; comprueba bloqueo, split DNS y `bind_hosts` con la IP del tailnet | tar |
 | 7 | Vaultwarden: `vw-data` de la copia; comprueba `/alive`, `prelogin` y que `rsa_key.pem` no cambia | `Vaultwarden_Backups` |
@@ -80,38 +92,36 @@ Lo que ningún script puede hacer y se olvida:
 
 ## El kit
 
-Sin kit no hay recuperación: las dos cosas que abren las copias no pueden
-vivir dentro de las copias.
+La única pieza que no puede vivir dentro de las copias es la passphrase.
+Todo lo demás está en Drive, y Drive se abre con la cuenta de Google desde
+cualquier navegador.
 
 **En papel, en un cajón:**
 
 - La passphrase (`~/.config/vault/backup-passphrase`, 48 caracteres).
 - La cuenta de Google del Drive y del login de Tailscale.
 - El nombre del proyecto de Google Cloud donde vive el cliente OAuth de
-  rclone (por si hay que rehacer `rclone.conf`: el remoto usa
-  `scope = drive.file`, que solo ve los ficheros subidos por *ese*
-  cliente; con el cliente por defecto de rclone las copias son invisibles).
+  rclone. Solo hace falta si se pierde el tar del sistema *y* hay que
+  rehacer `rclone.conf` a mano: el remoto usa `scope = drive.file`, que
+  solo ve los ficheros subidos por *ese* cliente; con el cliente por
+  defecto de rclone las copias son invisibles.
 - "El procedimiento está en github.com/SaguadoDev/homelab, docs/recuperacion.md".
 
-**En un USB:** lo llena `scripts/kit-usb.sh`.
+**En Drive, `Sistema_Backups/`**, lo deja `backup-sistema.sh` cada noche:
 
-```bash
-~/homelab/scripts/kit-usb.sh /media/server/KIT
-```
-
-Deja `rclone.conf`, el último tar del sistema, `restaurar-servidor.sh`
-suelto, los tres repos como `git bundle` y un `KIT-FECHA.txt` con lo que
-hay y lo que falta. Lo único que no puede escribir él es el
-`github-token`: un *fine-grained PAT* de solo lectura (Contents) sobre
-`vault_app` y `Combina`, que se crea en GitHub y se guarda a mano en el
-USB con ese nombre.
+- `sistema_FECHA.tar.gz.gpg` — con `rclone.conf` dentro, entre lo demás.
+- `repos/homelab-HASH.bundle.gpg`, `repos/vault_app-HASH.bundle.gpg`,
+  `repos/Combina-HASH.bundle.gpg` — los tres repos enteros, renovados
+  cuando cambia `HEAD`. Sin ellos haría falta un token de GitHub para los
+  dos privados, y ese token tendría que guardarse en algún sitio.
+- `LEEME.txt` — los cuatro pasos, para quien abra la carpeta dentro de
+  tres años.
 
 **Y en la bóveda de Bitwarden**, que la app del móvil abre sin red: la
 passphrase. Comprobarlo en modo avión, no asumirlo.
 
-Refrescar el USB cuando cambie algo del kit y como mínimo cada tres
-meses. El bot vigila la edad del tar en Drive (`/copias`); el USB no lo
-vigila nadie.
+`/copias` en el bot vigila la edad del tar. Si un día se quiere una copia
+fuera de Google, basta con bajar esa carpeta a un disco: ya va cifrada.
 
 ---
 

@@ -2,8 +2,11 @@
 
 > **Ejecutado el 18 de septiembre de 2026.** Se conserva como registro del
 > inventario y del razonamiento. Lo vigente es [recuperacion.md](recuperacion.md)
-> (runbook), `scripts/backup-sistema.sh`, `scripts/restaurar-servidor.sh`,
-> `scripts/kit-usb.sh` y la [decisión §14](decisiones.md#14-copia-del-sistema-reproducible-en-vez-de-imagen-de-disco).
+> (runbook), `scripts/backup-sistema.sh`, `scripts/restaurar-servidor.sh` y la
+> [decisión §14](decisiones.md#14-copia-del-sistema-reproducible-en-vez-de-imagen-de-disco).
+> Un cambio sobre lo planeado: el usuario no quiso USB. El kit es solo la
+> passphrase en papel; `rclone.conf` va dentro del tar y los repos van como
+> bundles cifrados en la misma carpeta de Drive. `kit-usb.sh` no existe.
 
 Plan para que lo ejecute un agente. Escrito el 18 de septiembre de 2026
 tras inventariar el servidor. Objetivo: que si mañana muere el disco (o

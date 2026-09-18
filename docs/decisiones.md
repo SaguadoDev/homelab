@@ -326,13 +326,16 @@ tiene por qué arrancar en otro hardware. La reproducibilidad además
 obliga a que el repo diga la verdad: lo que no está documentado no se
 restaura, y eso se nota en el ensayo.
 
-**El nudo que ningún software desata.** Para bajar el tar del sistema
-hace falta `rclone.conf`; para descifrarlo, la passphrase. Ninguna de las
-dos puede vivir solo dentro de lo que protege. De ahí el kit físico: la
-passphrase en papel y un USB con `rclone.conf`, el último tar, el script
-suelto y los repos. La bóveda de Bitwarden en el móvil —que se abre sin
-red— es la copia digital más probable de la passphrase, y el motivo de
-que exista una fuera del propio Vaultwarden.
+**El nudo que ningún software desata.** Para descifrar el tar del
+sistema hace falta la passphrase, y la passphrase no puede vivir dentro
+de lo que protege. Es la única pieza en papel. Todo lo demás está en
+Drive, que se abre con la cuenta de Google desde un navegador: el tar
+lleva `rclone.conf` dentro, y los tres repos van como `git bundle`
+cifrados en la misma carpeta, así que ni el acceso a Drive ni GitHub ni
+un token son requisitos. Se descartó un USB con el kit: es una cosa más
+que mantener al día y que nadie vigila. La bóveda de Bitwarden en el
+móvil —que se abre sin red— es la copia digital más probable de la
+passphrase, y el motivo de que exista una fuera del propio Vaultwarden.
 
 **Identidad de Tailscale, sí.** Restaurar `tailscaled.state` devuelve el
 nodo con la misma IP y el mismo nombre, sin login y sin tocar la consola.

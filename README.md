@@ -218,8 +218,9 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
       Ubuntu limpia a servidor completo ([recuperación](docs/recuperacion.md)).
 - [ ] **Probar la restauración automáticamente.** El ensayo en VM cubre
       las cinco copias de una vez, pero se lanza a mano.
-- [ ] **Una tercera copia fuera de Google.** El USB del kit lleva el tar
-      del sistema; los datos siguen dependiendo de una cuenta.
+- [ ] **Una tercera copia fuera de Google.** Datos, sistema y repos viven
+      en Drive. Un `rclone sync gdrive:` a un disco externo de vez en
+      cuando; ya va todo cifrado.
 
 **Bot**
 
@@ -250,7 +251,7 @@ homelab/
 │   └── opengym/           compose + .env.example
 ├── bot/                   Código del bot de monitorización
 ├── systemd/               Unidad del bot (symlinkada desde /etc)
-├── scripts/               Copias cifradas a Google Drive, restauración y kit
+├── scripts/               Copias cifradas a Google Drive y restauración
 └── tailscale/             serve, certificados y comprobaciones
 ```
 
