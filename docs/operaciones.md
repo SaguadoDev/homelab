@@ -9,9 +9,9 @@ Cada servicio vive en su directorio con su `docker-compose.yml`. Todos los
 comandos se ejecutan desde ese directorio.
 
 ```
-/home/homelab/
+/home/server/
 ├── homelab/        <- este repo (configuración versionada)
-├── adguard/        <- servicios en ejecución, con sus datos
+├── adguard/        <- servicios en ejecución, con sus datos (conf/ y work/)
 ├── vaultwarden/
 ├── vault_app/
 ├── opengym/
@@ -436,9 +436,23 @@ docker ps --format '{{.Names}}\t{{.Status}}'  # los cuatro arriba
 systemctl status server-bot
 tailscale status
 dig @<IP_LAN> ejemplo.com +short              # DNS de la casa
+dig @<IP_TAILSCALE> ejemplo.com +short        # y del tailnet
 ```
 
-El bot manda un mensaje de arranque; si no llega, empezar por ahí.
+El bot manda un mensaje de arranque; si no llega, empezar por ahí. A la
+mañana siguiente, `/copias` en el bot: las cinco tienen que haber llegado.
+
+---
+
+## Tras un desastre
+
+Disco muerto, máquina muerta, o un `rm` donde no tocaba: el procedimiento
+entero está en [recuperacion.md](recuperacion.md). Resumen: Ubuntu limpia,
+`git clone` de este repo, `sudo bash scripts/restaurar-servidor.sh --kit
+<USB>`, y los tres secretos del kit cuando los pida.
+
+Para mantener el kit al día: `scripts/kit-usb.sh /ruta/al/usb`, y como
+mínimo cada tres meses.
 
 ---
 

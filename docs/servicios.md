@@ -16,7 +16,7 @@ bloqueador; el DNS sí los cubre.
 | Imagen | `adguard/adguardhome:latest` |
 | Red | `network_mode: host` |
 | Puertos | `53/udp`, `53/tcp` en `192.168.1.50` y en `<IP_TAILSCALE>` (DNS) · `80/tcp` (interfaz web) |
-| Datos | `./work`, `./conf` |
+| Datos | `~/adguard/work`, `~/adguard/conf` (hasta el 18/09/2026 vivieron en `/path/to/your/`, la ruta de ejemplo de un tutorial copiada literal) |
 
 **Upstreams por DoH.** Quad9 y Cloudflare en modo `parallel`: se lanzan
 las dos consultas y gana la que responda antes. Si un proveedor se cae, la
@@ -284,8 +284,8 @@ observabilidad del montaje.
 | | |
 |---|---|
 | Ejecución | systemd (`server-bot.service`), venv de Python |
-| Alertas | CPU, RAM, disco, temperatura, servicios caídos |
-| Antirruido | Cooldown de 15 min por causa |
+| Alertas | CPU, RAM, disco, temperatura, servicios caídos, copias con retraso |
+| Antirruido | Cooldown de 15 min por causa; las copias, una revisión al día |
 
 Documentación completa en [`bot/README.md`](../bot/README.md).
 
@@ -298,9 +298,10 @@ almacenamiento, actualizaciones y terminal. Viene con Ubuntu y se activa
 con `systemctl enable --now cockpit.socket`.
 
 Es el único servicio que escucha en `0.0.0.0`, y es una decisión
-consciente a medias: es cómodo desde la LAN, pero lo correcto sería
-publicarlo también por `tailscale serve` y cerrarlo a loopback. Está en la
-lista de pendientes.
+consciente ([decisiones §14](decisiones.md#14-copia-del-sistema-reproducible-en-vez-de-imagen-de-disco)):
+se usa desde el PC y el móvil en la LAN, y publicarlo solo por `tailscale
+serve` rompería ese uso. Se queda así, y el script de restauración lo
+instala por defecto.
 
 ---
 

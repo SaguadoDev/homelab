@@ -299,3 +299,67 @@ El exit node obliga a enrutar todo el tráfico por casa y a deshacer la
 - Sigue sin ser `0.0.0.0`: son dos IPs concretas. La restricción de la
   incidencia 9 no cambia.
 
+## 14. Copia del sistema: reproducible en vez de imagen de disco
+
+**Alternativas:** imagen de disco periódica (Clonezilla, `dd`, Timeshift)
+a un disco externo; no hacer nada y reconstruir a mano si pasa.
+
+**Elegido:** capas reproducibles. Ubuntu limpia + una lista fija de
+paquetes + doce ficheros de `/etc` + tres repos de GitHub + un tar cifrado
+con lo que no se regenera (secretos, identidad de Tailscale, AdGuard,
+cron, composes vivos) + las cuatro copias de datos que ya existían. Un
+script, `scripts/restaurar-servidor.sh`, sabe el orden. Runbook en
+[recuperacion.md](recuperacion.md); inventario y plan en
+[plan-recuperacion.md](plan-recuperacion.md).
+
+Hasta septiembre de 2026 había copia de los **datos** de los cuatro
+servicios y de nada más. Si moría el disco, los datos volvían pero había
+que reconstruir a mano paquetes, IP fija, DNS del host, Docker, Tailscale
+con su identidad y sus `serve`, AdGuard, los `.env`, los cuatro cron y el
+bot. Y tres cosas no estaban en ningún sitio: `tailscaled.state`, la
+configuración de AdGuard y el cron de root.
+
+**Por qué no una imagen.** Necesita un segundo disco enchufado, envejece
+desde el día que se hace, arrastra 24 GB de los que casi todo se regenera
+y, si lo que muere es la máquina y no el disco, la imagen de un m715q no
+tiene por qué arrancar en otro hardware. La reproducibilidad además
+obliga a que el repo diga la verdad: lo que no está documentado no se
+restaura, y eso se nota en el ensayo.
+
+**El nudo que ningún software desata.** Para bajar el tar del sistema
+hace falta `rclone.conf`; para descifrarlo, la passphrase. Ninguna de las
+dos puede vivir solo dentro de lo que protege. De ahí el kit físico: la
+passphrase en papel y un USB con `rclone.conf`, el último tar, el script
+suelto y los repos. La bóveda de Bitwarden en el móvil —que se abre sin
+red— es la copia digital más probable de la passphrase, y el motivo de
+que exista una fuera del propio Vaultwarden.
+
+**Identidad de Tailscale, sí.** Restaurar `tailscaled.state` devuelve el
+nodo con la misma IP y el mismo nombre, sin login y sin tocar la consola.
+Importa más de lo que parece: la IP es el nameserver global del tailnet
+([§13](#13-adguard-como-dns-del-tailnet-no-solo-de-la-lan)) y el nombre
+MagicDNS ata las passkeys de openGym y la URL compilada en el APK de
+Combina. Un nodo nuevo sale como `server-1` si el viejo sigue en la
+consola, y entonces nada de eso vale. El script aborta si el nombre no es
+`server`.
+
+**Cockpit se queda en la LAN.** Contradice la
+[decisión §4](#4-todo-publicado-en-127001-nunca-en-0000) y se decidió
+mantenerlo igualmente: se usa desde el PC y el móvil, y publicarlo por
+`tailscale serve` rompería ese uso. Es la única excepción y el script de
+restauración lo instala por defecto.
+
+**Lo que se paga.**
+
+- Una quinta copia nocturna en el cron de root, ~300 KB, y una línea más
+  en el bot (`/copias`).
+- El tar lleva la clave privada del nodo de Tailscale, las claves SSH del
+  host y todos los secretos. Va cifrado con la misma passphrase que el
+  resto; si esa passphrase cae, cae todo, igual que antes.
+- El ensayo hay que repetirlo cuando cambie el script o se añada un
+  servicio, y es manual.
+- Los cuatro scripts de backup del repo siguen saneados con
+  `/home/homelab`: no son ejecutables tal cual. Mientras no se
+  refactoricen a rutas relativas, el tar del sistema lleva las copias
+  vivas y esa es la fuente de verdad. Pendiente.
+

@@ -104,7 +104,7 @@ Detalle, flujos y redes de Docker en
 | **Vault App** | API propia de finanzas personales (Fastify + PostgreSQL) | `https://<host>.<tailnet>.ts.net:8443` |
 | **openGym** | Registro de entrenamientos y peso corporal para dos personas, sin suscripción y con el historial en casa | `https://<host>.<tailnet>.ts.net:8444` |
 | **Combina** | API de respaldo y sincronización de una aplicación Android de armario digital, con proxy a Gemini para etiquetar la ropa | `https://<host>.<tailnet>.ts.net:8445` |
-| **Bot de Telegram** | Toda la observabilidad: alertas de CPU, RAM, disco, temperatura y servicios caídos | Telegram |
+| **Bot de Telegram** | Toda la observabilidad: alertas de CPU, RAM, disco, temperatura, servicios caídos y copias con retraso | Telegram |
 | **Tailscale** | Red privada, terminación TLS y nodo de salida | — |
 | **Cockpit** | Panel de administración del host | `:9090` |
 
@@ -201,11 +201,10 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
 - [ ] **Claves SSH en lugar de un PAT.** El acceso a GitHub va por HTTPS
       con token personal: caduca, hay que rotarlo a mano y vive en el
       disco.
-- [ ] **Cockpit a loopback.** Es el único servicio que escucha en
-      `0.0.0.0`. Debería publicarse por `tailscale serve` como los demás.
-- [ ] **Mover los datos de AdGuard** de `/path/to/your/` a rutas relativas
-      al compose. El repo ya lleva la versión corregida; aplicarlo en la
-      máquina implica parar el DNS de la casa un momento.
+- [ ] **Los scripts de backup del repo no son ejecutables tal cual.**
+      Van saneados con `/home/homelab`; las copias vivas son la fuente de
+      verdad y viajan en el tar del sistema. Refactorizarlos a rutas
+      relativas y enlazarlos como la unidad del bot.
 - [ ] **openGym se actualiza a mano.** Va con la versión fijada a
       propósito ([decisiones §9](docs/decisiones.md#9-opengym-con-la-versión-fijada)),
       así que los parches no llegan solos: hay que mirar los *releases* de
@@ -214,12 +213,13 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
 
 **Copias**
 
-- [ ] **Probar la restauración automáticamente.** Hoy se hace a mano. Un
-      script mensual que levante un contenedor desechable, verifique y
-      avise por el bot cerraría el círculo.
-- [ ] **Una tercera copia fuera de Google.** Todo depende de una cuenta.
-      Un disco externo que se conecte de vez en cuando es la única defensa
-      real contra perder esa cuenta.
+- [x] **Copia del servidor entero y script de restauración.** Quinta copia
+      nocturna con lo que no se regenera y `restaurar-servidor.sh` de
+      Ubuntu limpia a servidor completo ([recuperación](docs/recuperacion.md)).
+- [ ] **Probar la restauración automáticamente.** El ensayo en VM cubre
+      las cinco copias de una vez, pero se lanza a mano.
+- [ ] **Una tercera copia fuera de Google.** El USB del kit lleva el tar
+      del sistema; los datos siguen dependiendo de una cuenta.
 
 **Bot**
 
@@ -241,7 +241,8 @@ homelab/
 │   ├── decisiones.md      Por qué así y no de otra forma
 │   ├── incidencias.md     Lo que se rompió y cómo se arregló
 │   ├── operaciones.md     Runbook: cómo hacer cada cosa
-│   └── backups.md         Estrategia, restauración y cómo probarla
+│   ├── backups.md         Estrategia, restauración y cómo probarla
+│   └── recuperacion.md    Del disco muerto al servidor de vuelta
 ├── services/
 │   ├── adguardhome/       compose + extracto de configuración
 │   ├── vaultwarden/       compose
@@ -249,7 +250,7 @@ homelab/
 │   └── opengym/           compose + .env.example
 ├── bot/                   Código del bot de monitorización
 ├── systemd/               Unidad del bot (symlinkada desde /etc)
-├── scripts/               Copias cifradas a Google Drive
+├── scripts/               Copias cifradas a Google Drive, restauración y kit
 └── tailscale/             serve, certificados y comprobaciones
 ```
 
