@@ -3,18 +3,22 @@
 Cuatro sistemas con datos que no se pueden perder: la bóveda de
 contraseñas, la base de datos financiera, el historial de entrenamientos y
 el armario digital. Cada uno tiene una red remota cifrada y corta; la base
-financiera tiene además una local, amplia y barata.
+financiera tiene además una local, amplia y barata. Y una quinta copia
+que no es de datos sino del **sistema**: lo que hace falta para volver a
+montar la máquina que los sirve.
 
-| | Vaultwarden | Vault App | openGym | Combina |
-|---|---|---|---|---|
-| Copia local | — | `pg_dump` a las 03:30, 30 días | — | — |
-| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días | 05:30 → Drive, 7 días |
-| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG |
-| Lanzador | cron de root | cron del usuario | cron de root | cron del usuario |
-| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
+| | Vaultwarden | Vault App | openGym | Combina | Sistema |
+|---|---|---|---|---|---|
+| Copia local | — | `pg_dump` a las 03:30, 30 días | — | — | — |
+| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días | 05:30 → Drive, 7 días | 06:00 → Drive, 7 días + mensual |
+| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG |
+| Lanzador | cron de root | cron del usuario | cron de root | cron del usuario | cron de root |
+| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
 
-Las cuatro remotas comparten passphrase. Ver
+Las cinco remotas comparten passphrase. Ver
 [decisiones §6](decisiones.md#6-copias-cifradas-antes-de-salir-de-la-máquina).
+El bot las vigila: `/copias` muestra la edad de la última de cada carpeta
+y avisa cada mañana si alguna pasa de 30 horas.
 
 ## Instalación
 
@@ -36,12 +40,18 @@ rclone config          # tipo: drive, scope: drive.file
 
 # Programación
 sudo crontab -e
-#   0 3 * * *  /home/homelab/homelab/scripts/backup-vaultwarden.sh >> /var/log/backup-vw.log 2>&1
-#   0 5 * * *  /home/homelab/opengym/backup-opengym.sh >> /var/log/backup-opengym.log 2>&1
+#   0 3 * * *  /home/server/vaultwarden/backup_vaultwarden.sh >> /var/log/vaultwarden_backup.log 2>&1
+#   0 5 * * *  /home/server/opengym/backup-opengym.sh >> /var/log/backup-opengym.log 2>&1
+#   0 6 * * *  /home/server/homelab/scripts/backup-sistema.sh >> /var/log/backup-sistema.log 2>&1
 crontab -e
-#   30 4 * * * /home/homelab/homelab/scripts/backup-vault-app.sh >> ~/backups/backup-drive.log 2>&1
-#   30 5 * * * /home/homelab/Combina/server/scripts/backup-combina.sh >> /home/homelab/Combina/logs/backup.log 2>&1
+#   30 4 * * * /home/server/vault_app/server/scripts/backup-to-drive.sh >> /home/server/vault_app/server/backups/backup-drive.log 2>&1
+#   30 5 * * * /home/server/Combina/server/scripts/backup-combina.sh >> /home/server/Combina/logs/backup.log 2>&1
 ```
+
+Los cuatro scripts de datos corren desde su copia viva (`~/vaultwarden`,
+`~/opengym`, el clon de cada app); las de `scripts/` de este repo son la
+versión saneada, con `/home/homelab` en vez del usuario real. El del
+sistema es el único que corre directamente desde el repo.
 
 **Combina va en el cron del usuario**, como Vault App: su bind mount de
 imágenes es del usuario del servicio —el contenedor corre como `node`, uid
@@ -114,10 +124,28 @@ móvil o en el gestor de contraseñas. Si un dispositivo se pierde y la
 credencial no estaba sincronizada, ese perfil se queda fuera y la copia no
 lo arregla. Salva los datos, no el acceso.
 
-**No se respalda** (y es una decisión, no un olvido): el sistema
-operativo, las imágenes de Docker (se reconstruyen desde los compose), la
-configuración de AdGuard (listas públicas, se rehace en minutos) y el
-estado de tailscaled (un `tailscale up` y el nodo vuelve).
+**Sistema** — todo lo que no es dato de servicio ni se regenera desde un
+repo, para que [`restaurar-servidor.sh`](recuperacion.md) pueda dejar una
+Ubuntu limpia igual que esta: la identidad de Tailscale
+(`tailscaled.state`: clave del nodo, IP, nombre, `serve`), la
+configuración de AdGuard, los dos cron, los `.env` y los composes **tal y
+como corren** (no la versión saneada del repo), la red del host (netplan,
+resolved, `daemon.json`, sysctl), las claves SSH del host, `rclone.conf`,
+dotfiles y la memoria de Claude Code; más un manifiesto (paquetes, snaps,
+imágenes con digest, estado de Tailscale) y `SHA256SUMS`. Unos 300 KB.
+Corre en el cron de root porque casi todo eso es 0600 de root.
+
+Antes de esto, AdGuard y tailscaled se daban por "rehacibles en minutos".
+Dejó de ser verdad con la [decisión §13](decisiones.md#13-adguard-como-dns-del-tailnet-no-solo-de-la-lan):
+la IP del nodo es el DNS del tailnet y el nombre MagicDNS ata las passkeys
+y la URL del APK. Perder `tailscaled.state` obliga a tocar la consola y
+puede obligar a re-registrar credenciales.
+
+**No se respalda** (y es una decisión, no un olvido): el sistema operativo
+y los paquetes (los instala el script de restauración), las imágenes de
+Docker (se reconstruyen desde los compose), `opengym/media` (la baja el
+contenedor) y **la passphrase**, que no puede ir en una copia cifrada con
+ella misma: va en papel y en la bóveda de Bitwarden.
 
 ## Restaurar
 
@@ -263,10 +291,24 @@ datos desde los ajustes de Android y trayéndolo todo del servidor. Volvieron
 las prendas, sus conjuntos y sus fotos. Hasta hacer eso, la sincronización
 era una hipótesis con muy buena pinta.
 
+### Sistema
+
+No se restaura a mano: lo hace `scripts/restaurar-servidor.sh` fase a
+fase, y la prueba es el ensayo en VM descrito en
+[recuperacion.md](recuperacion.md#cómo-se-probó). Para mirar qué lleva un
+tar sin restaurar nada:
+
+```bash
+rclone copy gdrive:Sistema_Backups/sistema_FECHA.tar.gz.gpg .
+gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
+    --decrypt sistema_FECHA.tar.gz.gpg | tar -tzv
+```
+
 ## Deuda
 
-- **Las restauraciones se prueban a mano.** Debería ser un script mensual
-  que levante, verifique y avise por el bot.
-- **Todo depende de una cuenta de Google.** Falta una tercera copia en un
-  disco externo que se conecte de vez en cuando: es la única defensa real
-  contra el borrado de la cuenta.
+- **Las restauraciones de datos se prueban a mano.** Debería ser un script
+  mensual que levante, verifique y avise por el bot. El ensayo del sistema
+  en VM cubre las cinco de una vez, pero también se lanza a mano.
+- **Todo depende de una cuenta de Google.** El USB del kit lleva el último
+  tar del sistema, pero no los datos: falta una tercera copia de los datos
+  en un disco externo que se conecte de vez en cuando.
