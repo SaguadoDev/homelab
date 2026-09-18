@@ -147,10 +147,14 @@ multipass exec ensayo -- sudo bash /mnt/repos/homelab/scripts/restaurar-servidor
     --ensayo --kit /tmp/kit --repos-desde /mnt/repos
 ```
 
-Los clones se hacen desde los montajes (`--repos-desde`), así el ensayo
-prueba el árbol de trabajo actual y no hace falta token de GitHub. El
-script del repo tiene que estar **commiteado**: `git clone` de un montaje
-solo se lleva lo confirmado.
+Con `--repos-desde` los clones salen de los montajes, así el ensayo
+prueba el árbol de trabajo actual (solo lo **commiteado**: `git clone`
+de un montaje no ve cambios sin confirmar). Para ensayar la vía real
+—la de "solo tengo la passphrase y Drive"— se baja a un directorio el
+último `sistema_*.tar.gz.gpg` y `repos/*.bundle.gpg`, se pasa como
+`--kit` (con `backup-passphrase` dentro, porque `multipass exec` no tiene
+terminal para pedirla) y se omite `--repos-desde`: el script saca
+`rclone.conf` del tar y clona de los bundles.
 
 `--ensayo` cambia exactamente esto, y el script lo imprime al arrancar:
 no toca netplan ni hostname (la VM va por DHCP de multipass), **no
@@ -166,4 +170,5 @@ el script o se añada un servicio.
 
 | Fecha | Resultado |
 |---|---|
+| 18/09/2026 (2º) | Vía real: kit con solo el tar y los tres bundles bajados de Drive, sin `rclone.conf`, sin montajes, sin token. Fases 1–12 limpias a la primera en unos 6 minutos: `rclone.conf` salió del tar, los tres repos de los bundles, y los mismos datos que en el primer ensayo. |
 | 18/09/2026 | Primer ensayo, VM multipass en el propio servidor (2 vCPU, 6 GB). Fases 1–12 en unos 8 minutos con datos reales de Drive: 2 usuarios y 97 ítems en Vaultwarden con `rsa_key` intacta, 14 tablas en `vault`, rol y base `armario` con 35 filas, 2 perfiles en openGym con `secret` intacto, AdGuard filtrando en la IP de la VM. Dos retoques al script salidos del ensayo: openGym se comprueba contra `/api/health` (el healthcheck de la imagen sondea cada 5 min y la espera agotaba), y AdGuard reintenta el bloqueo durante dos minutos mientras baja las listas. Sin tocar producción. |
