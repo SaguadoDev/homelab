@@ -121,16 +121,26 @@ Una restauración que no se ha ejecutado nunca es una hipótesis. El
 ensayo se hace en una VM en el propio servidor, sin tocar producción:
 
 ```bash
-sudo snap install multipass
+sudo snap install multipass                    # el binario queda en /snap/bin
+multipass set local.privileged-mounts=true
 multipass launch 26.04 --name ensayo --cpus 2 --memory 6G --disk 30G
 multipass mount ~/vault_app ensayo:/mnt/repos/vault_app
 multipass mount ~/Combina   ensayo:/mnt/repos/Combina
 multipass mount ~/homelab   ensayo:/mnt/repos/homelab
 multipass exec ensayo -- sudo adduser --disabled-password --gecos '' server
-multipass transfer ~/.config/vault/backup-passphrase ~/.config/rclone/rclone.conf ensayo:/tmp/kit/
+multipass exec ensayo -- mkdir -p /tmp/kit
+# `multipass transfer` no puede leer directorios ocultos del home (confinamiento
+# del snap): se pasa por stdin.
+cat ~/.config/vault/backup-passphrase | multipass exec ensayo -- bash -c 'cat > /tmp/kit/backup-passphrase'
+cat ~/.config/rclone/rclone.conf       | multipass exec ensayo -- bash -c 'cat > /tmp/kit/rclone.conf'
 multipass exec ensayo -- sudo bash /mnt/repos/homelab/scripts/restaurar-servidor.sh \
     --ensayo --kit /tmp/kit --repos-desde /mnt/repos
 ```
+
+Los clones se hacen desde los montajes (`--repos-desde`), así el ensayo
+prueba el árbol de trabajo actual y no hace falta token de GitHub. El
+script del repo tiene que estar **commiteado**: `git clone` de un montaje
+solo se lleva lo confirmado.
 
 `--ensayo` cambia exactamente esto, y el script lo imprime al arrancar:
 no toca netplan ni hostname (la VM va por DHCP de multipass), **no
@@ -146,4 +156,4 @@ el script o se añada un servicio.
 
 | Fecha | Resultado |
 |---|---|
-| _pendiente_ | primer ensayo |
+| 18/09/2026 | Primer ensayo, VM multipass en el propio servidor (2 vCPU, 6 GB). Fases 1–12 en unos 8 minutos con datos reales de Drive: 2 usuarios y 97 ítems en Vaultwarden con `rsa_key` intacta, 14 tablas en `vault`, rol y base `armario` con 35 filas, 2 perfiles en openGym con `secret` intacto, AdGuard filtrando en la IP de la VM. Dos retoques al script salidos del ensayo: openGym se comprueba contra `/api/health` (el healthcheck de la imagen sondea cada 5 min y la espera agotaba), y AdGuard reintenta el bloqueo durante dos minutos mientras baja las listas. Sin tocar producción. |

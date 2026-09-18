@@ -401,7 +401,15 @@ PY
   IP_DNS=$(grep -A1 'bind_hosts:' "$YAML" | tail -1 | awk '{print $2}')
   esperar "AdGuard responde en $IP_DNS" 60 dig +short +time=2 @"$IP_DNS" example.com
   R=$(dig +short +time=3 @"$IP_DNS" doubleclick.net | head -1)
-  [ "$R" = "0.0.0.0" ] && ok "filtrado activo (doubleclick.net → 0.0.0.0)" || log "[WARN] doubleclick.net → '$R' (¿listas aún descargándose?)"
+  # En una máquina nueva AdGuard tarda un minuto en bajar las listas: la
+  # primera consulta puede salir sin filtrar aunque la configuración sea la
+  # buena. Se reintenta un rato antes de avisar.
+  for _ in $(seq 1 24); do
+    R=$(dig +short +time=3 @"$IP_DNS" doubleclick.net | head -1)
+    [ "$R" = "0.0.0.0" ] && break
+    sleep 5
+  done
+  [ "$R" = "0.0.0.0" ] && ok "filtrado activo (doubleclick.net → 0.0.0.0)" || log "[WARN] doubleclick.net → '$R' tras dos minutos: revisar las listas en la web de AdGuard"
   if [ $ENSAYO = 0 ]; then
     R=$(dig +short +time=3 @"$IP_DNS" "$(tailscale status --json | jq -r .Self.DNSName | sed 's/\.$//')" | head -1)
     [ "$R" = "$(tailscale ip -4)" ] && ok "split DNS ts.net → $R" || log "[WARN] split DNS: $R"
@@ -516,7 +524,10 @@ if toca_fase 10; then fase 10 "openGym"
   como_usuario mkdir -p "$OG/media/img" "$OG/media/gif"
   MD5_ANTES=$(md5sum "$OG/data/secret" 2>/dev/null | awk '{print $1}')
   ( cd "$OG" && docker compose up -d --quiet-pull 2>&1 | sed 's/^/     /' )
-  esperar "API de openGym healthy" 180 compose_healthy opengym-api
+  # No se espera al healthcheck de la imagen: su intervalo es de 5 minutos y
+  # la primera sonda tarda eso en llegar. Se pregunta a la API directamente.
+  WEB_PORT=$(grep -m1 '^WEB_PORT=' "$OG/.env" | cut -d= -f2)
+  esperar "API de openGym responde" 120 sh -c "curl -sf http://127.0.0.1:${WEB_PORT:-8081}/api/health | grep -q '\"ok\":true'"
   MD5_DESPUES=$(md5sum "$OG/data/secret" 2>/dev/null | awk '{print $1}')
   [ "$MD5_ANTES" = "$MD5_DESPUES" ] && ok "data/secret intacto (las sesiones siguen valiendo)" || fallo "data/secret cambió al arrancar: no se restauró"
   RP=$(grep -m1 '^RP_ID=' "$OG/.env" | cut -d= -f2)
@@ -553,8 +564,9 @@ fi
 if toca_fase 12; then fase 12 "Verificación"
   echo "   Contenedores:"
   docker ps -a --format '     {{.Names}}\t{{.Status}}' | sort
-  NO_SANOS=$(docker ps --format '{{.Names}} {{.Status}}' | grep -v -E 'healthy|adguardhome' || true)
-  [ -z "$NO_SANOS" ] && ok "todos los contenedores healthy" || log "[WARN] sin healthy: $NO_SANOS"
+  # "starting" no es fallo: el healthcheck de openGym sondea cada 5 minutos.
+  NO_SANOS=$(docker ps --format '{{.Names}} {{.Status}}' | grep -v -E 'healthy|starting|adguardhome' || true)
+  [ -z "$NO_SANOS" ] && ok "todos los contenedores healthy (o arrancando)" || log "[WARN] sin healthy: $NO_SANOS"
   if [ $ENSAYO = 0 ] || [ $CON_TAILSCALE = 1 ]; then
     HOST_TS=$(tailscale status --json | jq -r .Self.DNSName | sed 's/\.$//')
     for p in 443 8443 8444 8445; do
