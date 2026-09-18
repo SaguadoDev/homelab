@@ -12,7 +12,10 @@ Dos cosas a la vez, en el mismo proceso:
 - **Responde a comandos.** Menú con botones inline sobre `python-telegram-bot`.
 - **Vigila en segundo plano.** Cada `INTERVALO_MONITORIZACION` segundos
   muestrea CPU, RAM, disco, temperatura y el estado de cada servicio, y
-  manda un aviso cuando algo cruza su umbral.
+  manda un aviso cuando algo cruza su umbral. Una vez al día, pasadas las
+  07:00, mira además las cinco carpetas de copias en Drive y avisa si la
+  última de alguna tiene más de 30 horas: es lo que nadie miraría hasta
+  necesitarla.
 
 ## Comandos
 
@@ -26,6 +29,7 @@ Dos cosas a la vez, en el mismo proceso:
 | `/docker` | Todos los contenedores y su estado |
 | `/ping` | Conectividad y latencia hacia el exterior |
 | `/alertas` | Activar o silenciar los avisos automáticos |
+| `/copias` | Edad y tamaño de la última copia de cada carpeta de Drive |
 | `/help` | El menú |
 
 ## Diseño

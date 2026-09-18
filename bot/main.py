@@ -38,6 +38,7 @@ logger.addHandler(_console_handler)
 # ──────────────────────────────────────────────
 _ultimo_alerta: dict[str, float] = {}
 _alertas_activas: bool = True
+_copias_revisadas_el: str = ""   # fecha (YYYY-MM-DD) de la última revisión de copias
 
 
 def deberia_alertar(clave: str) -> bool:
@@ -107,6 +108,9 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("📡 Ping", callback_data="ping"),
             InlineKeyboardButton("🔔 Alertas", callback_data="alertas"),
         ],
+        [
+            InlineKeyboardButton("💾 Copias", callback_data="copias"),
+        ],
     ]
     mensaje = (
         "🤖 *Panel de Control*\n\n"
@@ -119,6 +123,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🐳 `/docker` — Contenedores Docker\n"
         "📡 `/ping` — Conectividad\n"
         "🔔 `/alertas` — Gestionar alertas\n"
+        "💾 `/copias` — Copias en Drive\n"
         "❓ `/help` — Este menú"
     )
     await update.message.reply_text(
@@ -207,6 +212,16 @@ async def cmd_alertas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 #  comandos y callbacks inline)
 # ──────────────────────────────────────────────
 
+@solo_autorizado
+async def cmd_copias(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Edad de las cinco copias nocturnas en Drive."""
+    texto, teclado = _generar_copias()
+    await update.message.reply_text(
+        texto, parse_mode='Markdown',
+        reply_markup=InlineKeyboardMarkup(teclado),
+    )
+
+
 def _generar_estado():
     cpu = hardware.obtener_uso_cpu()
     ram = hardware.obtener_uso_ram()
@@ -265,6 +280,23 @@ def _generar_servicios():
     teclado = [[
         InlineKeyboardButton("🔄 Actualizar", callback_data="servicios"),
         InlineKeyboardButton("📊 Estado", callback_data="estado"),
+    ]]
+    return texto, teclado
+
+
+def _generar_copias():
+    copias = servicios.comprobar_copias()
+    if copias is None:
+        texto = "💾 *Copias en Drive*\n\nrclone no responde o no llega a Drive ⚠️"
+    else:
+        lineas = [f"• {c['nombre']}: {c['detalle']}" for c in copias]
+        texto = (
+            f"💾 *Copias en Drive*\n\n" + "\n".join(lineas) +
+            f"\n\nAviso si alguna pasa de {servicios.COPIAS_HORAS_MAX} h."
+        )
+    teclado = [[
+        InlineKeyboardButton("🔄 Actualizar", callback_data="copias"),
+        InlineKeyboardButton("🌐 Servicios", callback_data="servicios"),
     ]]
     return texto, teclado
 
@@ -365,6 +397,7 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "estado": _generar_estado,
         "servicios": _generar_servicios,
         "alertas": _generar_alertas,
+        "copias": _generar_copias,
     }
 
     if data in generadores_simples:
@@ -537,6 +570,32 @@ async def tarea_monitorizacion(app):
                 )
                 logger.warning(f"Alerta Combina: {combina}")
 
+            # --- Copias en Drive: una vez al día, pasadas las 07:00 ---
+            # A esa hora las cinco ya deberían estar subidas (la última, la
+            # del sistema, a las 06:00). Mirar Drive cada minuto sería pagar
+            # cinco llamadas a la API por nada; una al día basta, y el
+            # cooldown normal no aplica: si falta una copia se avisa cada día
+            # hasta que vuelva a llegar.
+            global _copias_revisadas_el
+            hoy = time.strftime('%Y-%m-%d')
+            if time.localtime().tm_hour >= 7 and _copias_revisadas_el != hoy:
+                _copias_revisadas_el = hoy
+                copias = await asyncio.to_thread(servicios.comprobar_copias)
+                if copias is None:
+                    logger.warning("Revisión de copias: rclone no responde")
+                else:
+                    malas = [c for c in copias if not c['ok']]
+                    if malas and _alertas_activas:
+                        lineas = "\n".join(f"• {c['nombre']}: {c['detalle']}" for c in malas)
+                        await app.bot.send_message(
+                            chat_id=config.TELEGRAM_CHAT_ID,
+                            text=f"💾 *ALERTA* Copias en Drive con retraso:\n{lineas}",
+                            parse_mode='Markdown',
+                        )
+                        logger.warning(f"Alerta copias: {[c['nombre'] for c in malas]}")
+                    else:
+                        logger.info("Revisión de copias: las cinco al día")
+
         except Exception as e:
             logger.error(f"Error en monitorización: {e}")
 
@@ -567,6 +626,7 @@ def main():
     app.add_handler(CommandHandler("docker", cmd_docker))
     app.add_handler(CommandHandler("ping", cmd_ping))
     app.add_handler(CommandHandler("alertas", cmd_alertas))
+    app.add_handler(CommandHandler("copias", cmd_copias))
 
     # Botones inline
     app.add_handler(CallbackQueryHandler(callback_handler))

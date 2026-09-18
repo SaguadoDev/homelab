@@ -1,4 +1,18 @@
 import subprocess
+from datetime import datetime, timezone
+
+# Las cinco copias nocturnas en Drive y a qué hora deberían estar subidas.
+# Las horas son las de docs/backups.md; el umbral de 30 h deja margen a un
+# día entero de retraso (un corte de luz a las 03:00) sin gritar, pero grita
+# antes de que la rotación a 7 días empiece a comerse copias buenas.
+COPIAS = (
+    ("Vaultwarden", "gdrive:Vaultwarden_Backups", "vaultwarden_"),
+    ("Vault App",   "gdrive:Vault_Backups",       "vault_"),
+    ("openGym",     "gdrive:openGym_Backups",     "opengym_"),
+    ("Combina",     "gdrive:Armario_Backups",     "armario_"),
+    ("Sistema",     "gdrive:Sistema_Backups",     "sistema_"),
+)
+COPIAS_HORAS_MAX = 30
 
 
 def comprobar_adguard():
@@ -249,3 +263,61 @@ def comprobar_conectividad(host="8.8.8.8", count=1):
         return {'ok': False, 'ms': None}
     except Exception:
         return {'ok': False, 'ms': None}
+
+
+def comprobar_copias():
+    """Edad y tamaño de la copia más reciente de cada carpeta de Drive.
+
+    Corre como el usuario del bot, cuya rclone.conf es la misma que usan los
+    scripts. Devuelve una lista de dicts con 'nombre', 'ok', 'horas',
+    'fichero', 'kb' y 'detalle'; o None si rclone no está o no llega a Drive.
+
+    Solo mira lo que hay en el remoto: no distingue "el cron no corrió" de
+    "el script falló" — para eso están los logs. Lo que sí detecta es lo que
+    nadie miraría: una copia que dejó de llegar hace días y una rotación que
+    sigue borrando las viejas mientras tanto.
+    """
+    resultados = []
+    for nombre, remoto, prefijo in COPIAS:
+        try:
+            salida = subprocess.check_output(
+                ['rclone', 'lsl', remoto + '/', '--max-depth', '1',
+                 '--include', prefijo + '*'],
+                stderr=subprocess.STDOUT, timeout=60,
+            ).decode('utf-8')
+        except subprocess.CalledProcessError:
+            # La carpeta no existe (todavía) o Drive no la deja listar: es un
+            # problema de ESA copia, no de rclone.
+            salida = ''
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            return None
+        except Exception:
+            return None
+
+        # rclone lsl: "   tamaño fecha hora.fracción nombre"
+        ultimo = None
+        for linea in salida.splitlines():
+            partes = linea.split(None, 3)
+            if len(partes) < 4:
+                continue
+            kb = int(partes[0]) // 1024
+            # rclone lsl imprime la hora en la zona local del sistema.
+            fecha = datetime.fromisoformat(f"{partes[1]}T{partes[2][:19]}").astimezone()
+            if ultimo is None or fecha > ultimo[0]:
+                ultimo = (fecha, kb, partes[3])
+
+        if ultimo is None:
+            resultados.append({'nombre': nombre, 'ok': False, 'horas': None,
+                               'fichero': None, 'kb': 0, 'detalle': 'sin copias 🔴'})
+            continue
+
+        horas = (datetime.now(timezone.utc) - ultimo[0]).total_seconds() / 3600
+        ok = horas <= COPIAS_HORAS_MAX and ultimo[1] > 0
+        if not ok:
+            detalle = f"hace {horas:.0f} h 🔴"
+        else:
+            detalle = f"hace {horas:.0f} h, {ultimo[1]} KB 🟢"
+        resultados.append({'nombre': nombre, 'ok': ok, 'horas': horas,
+                           'fichero': ultimo[2], 'kb': ultimo[1], 'detalle': detalle})
+    return resultados
+
