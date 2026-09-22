@@ -170,18 +170,29 @@ def comprobar_combina():
         return "Activo 🟢"  # El contenedor corre aunque no podamos leer health
 
 
+# Sin respuesta de ninguna fuente ADS-B durante más de esto, hexwatch alerta.
+# Por debajo es ruido normal: tras un 429 el backoff llega a 10 min por
+# fuente. Se mira la ANTIGÜEDAD, no un recuento, así que vale igual para una
+# aeronave que para diez.
+HEXWATCH_SIN_DATOS_MAX = 1800
+
+
 def comprobar_hexwatch():
     """Comprueba hexwatch, el seguimiento de vuelos, que corre en systemd.
 
-    No es un contenedor: se mira la unidad y luego su propia API por
+    No es un contenedor: se pregunta a systemd y después a su propia API por
     loopback, que es lo mismo que ve la app a través de `tailscale serve`.
+    Una unidad `active` con la API colgada seguiría pareciendo sana.
 
-    `data_ok` es falso cuando ninguna fuente ADS-B responde (caída de las
-    APIs comunitarias, o backoff tras un 429). El proceso está sano pero lo
-    que sirve es viejo: se pinta en amarillo y **no alerta**, porque no es
-    un fallo de este servidor ni hay nada que arreglar desde aquí.
+    Lo que aquí no delata nadie es el silencio: un demonio vivo que no
+    recibe datos (sin red, con las dos APIs en backoff). No hay usuario que
+    entre y note que no va, así que se mira la edad del último sondeo bueno
+    (`data_age_s`). Un rato sin datos es normal y se pinta en amarillo sin
+    alertar; pasado `HEXWATCH_SIN_DATOS_MAX`, rojo y alerta.
     """
     try:
+        # `is-active` sale con código 3 si la unidad no está activa: `run` y
+        # mirar la salida, no `check_output`.
         activo = subprocess.run(
             ['systemctl', 'is-active', 'hexwatch'],
             capture_output=True, text=True, timeout=10
@@ -191,8 +202,10 @@ def comprobar_hexwatch():
     except Exception:
         return "Error / Inaccesible ⚠️"
 
+    if activo == 'failed':
+        return "Fallido 🔴"
     if activo != 'active':
-        return "Detenido 🔴"
+        return f"Detenido 🔴 ({activo})"
 
     try:
         with urllib.request.urlopen('http://127.0.0.1:3002/status', timeout=5) as r:
@@ -202,7 +215,13 @@ def comprobar_hexwatch():
 
     if estado.get('data_ok'):
         return "Activo 🟢"
-    return f"Sin datos ADS-B hace {estado.get('data_age_s', '?')} s 🟡"
+    edad = estado.get('data_age_s')
+    if edad is None:
+        return "Sin datos ADS-B todavía 🟡"
+    texto = f"{edad // 60} min" if edad < 3600 else f"{edad // 3600} h"
+    if edad > HEXWATCH_SIN_DATOS_MAX:
+        return f"Sin datos ADS-B hace {texto} 🔴"
+    return f"Sin datos ADS-B hace {texto} 🟡"
 
 
 def comprobar_tailscale():

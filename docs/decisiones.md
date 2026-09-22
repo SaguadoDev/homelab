@@ -366,3 +366,55 @@ restauración lo instala por defecto.
   refactoricen a rutas relativas, el tar del sistema lleva las copias
   vivas y esa es la fuente de verdad. Pendiente.
 
+---
+
+## 15. hexwatch sobre systemd, no en Docker
+
+Es el segundo servicio, después del bot, que corre directo sobre systemd
+mientras todo lo demás va en contenedores. La inconsistencia es deliberada.
+
+No tiene dependencias que aislar: biblioteca estándar de Python y nada más.
+No hay imagen que construir ni versión que fijar. Y, como el bot, tiene que
+seguir en pie aunque Docker no levante tras un corte: un detector de
+presencia que muere junto al resto no sirve de nada, porque su valor es
+precisamente estar cuando no hay nadie mirando.
+
+Un contenedor habría añadido Dockerfile, compose, red y una capa más entre
+el proceso y el disco, para el mismo resultado. Lo que sí se aprovecha de
+la convención de contenedores es la política de reinicio explícita
+(`Restart=always`, sin límite de reintentos) y el límite de logs, que aquí
+los dan systemd y journald.
+
+**Descartado:** meterlo en el compose de Combina para reutilizar la red. No
+usa Postgres —su base es un SQLite de un fichero—, así que no tendría de
+qué aprovecharse, y lo ataría a que ese compose esté en pie.
+
+---
+
+## 16. hexwatch en 127.0.0.1, con puertos comprobados
+
+Es la [decisión §4](#4-todo-publicado-en-127001-nunca-en-0000) aplicada a
+un servicio que no venía preparado para ella. El código escuchaba en
+`0.0.0.0` con un comentario que decía "solo LAN", que es exactamente lo que
+ya pasó con Vaultwarden ([incidencias §5](incidencias.md)): en esta red hay
+wifi de invitados y una televisión con firmware de 2019. El bind pasó a ser
+configurable con `127.0.0.1` por defecto, y lo saca al tailnet
+`tailscale serve`, por loopback.
+
+El puerto por defecto que traía era **8080**, que en esta máquina es la
+bóveda. No habría dado un error evidente: el que llega primero se queda el
+puerto y el otro falla al levantar, sin rastro en `docker ps` ni en el log
+del que ya estaba —la misma lección que AdGuard y el puerto 80
+([incidencias §1](incidencias.md))—. Se eligió **3002** en loopback y
+**8446** en el tailnet después de mirar `ss -tlnp` y
+`tailscale serve status`, no la documentación.
+
+La comprobación que lo cierra no es leer el código, es esta:
+
+```bash
+curl -m 5 http://<IP_LAN>:3002/status   # debe fallar
+```
+
+**Descartado:** dejar `0.0.0.0` y confiar en el cortafuegos del host. Una
+regla más que mantener y que se puede olvidar en una reinstalación, para
+evitar algo que se arregla con una línea de configuración.

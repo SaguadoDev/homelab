@@ -119,7 +119,7 @@ Ficha de cada uno en [`docs/servicios.md`](docs/servicios.md).
 
 ## Decisiones
 
-Las cuatro que más forma le dan al montaje. Las doce, con alternativas
+Las cuatro que más forma le dan al montaje. Las dieciséis, con alternativas
 descartadas, en [`docs/decisiones.md`](docs/decisiones.md).
 
 **Tailscale en lugar de abrir puertos.** Abrir el 443 de casa significa

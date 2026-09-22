@@ -279,21 +279,25 @@ lo distingue con un estado propio, `Sin base de datos 🟡`, que sí alerta.
 ## hexwatch — seguimiento de vuelos
 
 **Resuelve:** saber si unas aeronaves concretas están en su base o han
-salido, y desde cuándo, sin mirar un mapa de vuelos. Sondea las APIs
-gratuitas de la comunidad ADS-B, guarda cada respuesta, lleva un estado
-`EN_BASE` / `FUERA` por aeronave y se lo sirve a una app móvil propia.
+salido, y desde cuándo, sin mirar un mapa de vuelos. Sondea dos APIs ADS-B
+comunitarias cada 30 segundos, guarda todas las respuestas, mantiene un
+estado `EN_BASE` / `FUERA` por aeronave y se lo sirve a una app móvil
+propia.
 
 | | |
 |---|---|
 | Ejecución | systemd (`hexwatch.service`), sin Docker |
-| Código | Python, solo biblioteca estándar |
-| Puerto | `127.0.0.1:3002` |
-| Datos | `hexwatch.db` (SQLite en modo WAL) en el clon del repo |
-| Acceso | `https://<host>.<tailnet>.ts.net:8446` vía `tailscale serve` |
+| Código | Python, solo biblioteca estándar · repo privado aparte, aquí solo el despliegue |
+| Dónde | `~/<repo-hexwatch>`, el propio clon |
+| Puerto | `127.0.0.1:3002` · tailnet `:8446` |
+| Datos | `hexwatch.db` (SQLite, WAL) · ~1 MB al día y aeronave sin podar |
+| Consumo | ~0,3 % de un núcleo, ~30 MB de RAM |
+| Copia | ninguna todavía (ver *Pendiente* en el README) |
 
-**Sin Docker, a propósito.** No tiene dependencias ni imagen que construir,
-y tiene que seguir en pie aunque Docker no lo esté. La unidad vive en el
-repo de la aplicación (`deploy/hexwatch.service`) y
+**Sin Docker, a propósito.** Es el segundo servicio, después del bot, que
+corre directo sobre systemd
+([decisiones §15](decisiones.md#15-hexwatch-sobre-systemd-no-en-docker)).
+La unidad vive en el repo de la aplicación (`deploy/hexwatch.service`) y
 `/etc/systemd/system/hexwatch.service` es un *symlink* a ella, como la del
 bot: una sola copia, sin nada que sincronizar.
 
@@ -301,35 +305,44 @@ bot: una sola copia, sin nada que sincronizar.
 aeronaves y dónde está su base) y la base de datos cuelgan de ahí,
 ignorados por su `.gitignore`.
 
-**Buen vecino con las APIs comunitarias.** Un sondeo cada 30 s, una sola
-petición por fuente y tick sea cual sea el número de aeronaves (las dos
-APIs aceptan varios hex separados por coma), *backoff* exponencial ante
-cualquier respuesta que no sea 200 y nunca reintentos en caliente. Son
-servicios gratuitos mantenidos por voluntarios: un 429 se respeta.
+**Endpoints.**
 
-**`FUERA` no significa "volando".** Significa "ha salido y no se ha visto
-llegar". La cobertura ADS-B tiene huecos, así que el servicio nunca afirma
-lo que no ha visto: la app recibe cuándo salió y cuándo se la vio por
-última vez, y los muestra por separado.
+```
+GET /status[?hex=X]          estado actual por aeronave, desde cuándo y si hay datos frescos
+GET /events?limit=N[&hex=X]  últimos eventos (salidas, llegadas, cortes de datos)
+```
+
+**`FUERA` no significa "volando".** Significa *salió y no se la ha visto
+volver*. `/status` distingue lo observado de lo asumido (`assumed`), dice
+hace cuánto se la vio (`last_seen_min`) y si las fuentes responden
+(`data_ok`). El silencio significa "no lo sé", no "no está". No es
+teórico: una fuente externa llegó a dar un "vuelo" de más del doble de la
+autonomía de la aeronave, que en realidad eran varias salidas con paradas
+que nadie observó.
+
+**Buen vecino con las fuentes.** Son redes de voluntarios. Un sondeo cada
+30 s son 2.880 peticiones al día por fuente, muy por debajo del límite
+declarado de una por segundo, y **no crecen con la flota**: las dos APIs
+aceptan varios identificadores por consulta. Cualquier respuesta que no sea
+200 entra en *backoff* exponencial (60 s → 10 min) y nunca se reintenta en
+caliente.
 
 **Sin autenticación, así que solo tailnet.** La API escucha en loopback y
-la saca `tailscale serve`; publicarla en `0.0.0.0` la dejaría en claro
-para toda la LAN. Esa URL va compilada en la app: se decidió antes de
-compilar nada, que es la lección de las passkeys.
+la saca `tailscale serve`
+([decisiones §16](decisiones.md#16-hexwatch-en-127001-con-puertos-comprobados)).
+La URL del 8446 va compilada en la app: se decidió antes de compilar nada,
+que es la lección de las passkeys.
 
-**El bot distingue la caída propia de la ajena.** `Detenido 🔴` y
-`API sin responder 🔴` alertan. `Sin datos ADS-B 🟡` —ninguna fuente
-responde— se ve en `/servicios` pero no alerta: el fallo es de las APIs de
-fuera y no hay nada que arreglar desde aquí.
+**Qué vigila el bot.** Que la unidad esté `active`, que su API responda por
+loopback y que esté recibiendo datos. Un demonio vivo que no recibe nada
+—sin red, con las dos APIs en *backoff*— es el fallo que aquí no delata
+nadie, porque no hay usuario que entre y note que no va. Un rato sin datos
+se pinta en amarillo; pasada media hora, rojo y alerta.
 
-**Purga semanal** de los sondeos vacíos de más de 90 días, desde el cron de
-`server` (domingo 12:00). Los sondeos con posición se guardan siempre.
-
-**Presupuesto de disco:** ~1 MB al día **por aeronave** sin podar (con
-tres, ~1 GB al año); la purga lo deja en una fracción. Las peticiones a las
-redes, en cambio, **no crecen** con la flota: 2.880 al día por fuente.
-
-**Sin copia nocturna todavía.** Ver *Pendiente* en el README.
+**Mantenimiento.** `prune --days 90` semanal borra los sondeos vacíos
+antiguos; los que tienen posición se guardan siempre. No lo lanza el
+demonio: va en el cron de `server`, los domingos a mediodía, lejos de la
+ventana de copias.
 
 ---
 

@@ -572,10 +572,11 @@ async def tarea_monitorizacion(app):
                 )
                 logger.warning(f"Alerta Combina: {combina}")
 
-            # "Sin datos ADS-B" NO alerta: es una caída de las APIs externas,
-            # no de este servidor, y no hay nada que arreglar desde aquí.
+            # Todo lo rojo alerta, incluido "Sin datos ADS-B" pasada media
+            # hora: el demonio vivo que no recibe nada es el fallo que aquí
+            # no delata nadie. El amarillo (un backoff corto) no.
             hexwatch = servicios.comprobar_hexwatch()
-            if any(x in hexwatch for x in ("sin responder", "Detenido", "Error")) and deberia_alertar('hexwatch'):
+            if ("🔴" in hexwatch or "Error" in hexwatch) and deberia_alertar('hexwatch'):
                 await app.bot.send_message(
                     chat_id=config.TELEGRAM_CHAT_ID,
                     text=f"🚨 *ALERTA* hexwatch tiene problemas.\nEstado: {hexwatch}",

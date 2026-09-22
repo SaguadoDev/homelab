@@ -66,11 +66,13 @@ compartido, que ya vigila el estado de Vault App: duplicarlo duplicaría la
 alerta cuando lo que falla es la base y no el servicio.
 
 **hexwatch se mira por systemd y por su API, no por Docker.** Primero
-`systemctl is-active hexwatch`, después un `GET /status` por loopback.
-`Detenido 🔴` y `API sin responder 🔴` alertan; `Sin datos ADS-B 🟡`
-—el proceso está sano pero ninguna API comunitaria le responde— solo se
-ve en `/servicios`. Avisar de una caída ajena que no se puede arreglar
-desde aquí sería justo el tipo de alarma que acaba silenciada.
+`systemctl is-active hexwatch` (con `run`, no `check_output`: sale con
+código 3 cuando la unidad está parada), después un `GET /status` por
+loopback. Una unidad `active` con la API colgada no pasa por sana, y un
+demonio vivo que no recibe datos tampoco: se mira la edad del último sondeo
+bueno. Hasta media hora es un *backoff* normal tras un 429 y se queda en
+amarillo; a partir de ahí, rojo y alerta. Se mide antigüedad y no un
+recuento, así que vale igual para una aeronave que para diez.
 
 ## Instalación
 
