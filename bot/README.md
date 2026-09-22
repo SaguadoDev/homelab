@@ -70,7 +70,9 @@ alerta cuando lo que falla es la base y no el servicio.
 código 3 cuando la unidad está parada), después un `GET /status` por
 loopback. Una unidad `active` con la API colgada no pasa por sana, y un
 demonio vivo que no recibe datos tampoco: se mira la edad del último sondeo
-bueno. Hasta media hora es un *backoff* normal tras un 429 y se queda en
+bueno, y con datos entrando, que la base se siga escribiendo (la fecha
+de modificación de `HEXWATCH_DB`, sin abrir la SQLite). Hasta media hora
+es un *backoff* normal tras un 429 y se queda en
 amarillo; a partir de ahí, rojo y alerta. Se mide antigüedad y no un
 recuento, así que vale igual para una aeronave que para diez.
 

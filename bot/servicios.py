@@ -1,5 +1,7 @@
 import json
+import os
 import subprocess
+import time
 import urllib.request
 from datetime import datetime, timezone
 
@@ -175,6 +177,9 @@ def comprobar_combina():
 # fuente. Se mira la ANTIGÜEDAD, no un recuento, así que vale igual para una
 # aeronave que para diez.
 HEXWATCH_SIN_DATOS_MAX = 1800
+# La base de hexwatch, para ver que de verdad escribe (ver comprobar_hexwatch).
+# Sin la variable en .env, esa parte de la comprobación se salta.
+HEXWATCH_DB = os.getenv('HEXWATCH_DB')
 
 
 def comprobar_hexwatch():
@@ -188,7 +193,8 @@ def comprobar_hexwatch():
     recibe datos (sin red, con las dos APIs en backoff). No hay usuario que
     entre y note que no va, así que se mira la edad del último sondeo bueno
     (`data_age_s`). Un rato sin datos es normal y se pinta en amarillo sin
-    alertar; pasado `HEXWATCH_SIN_DATOS_MAX`, rojo y alerta.
+    alertar; pasado `HEXWATCH_SIN_DATOS_MAX`, rojo y alerta. Y con datos
+    entrando, que la base se siga escribiendo.
     """
     try:
         # `is-active` sale con código 3 si la unidad no está activa: `run` y
@@ -214,6 +220,21 @@ def comprobar_hexwatch():
         return "API sin responder 🔴"
 
     if estado.get('data_ok'):
+        # Recibe datos, pero ¿los guarda? Un fallo de escritura (disco lleno,
+        # permisos) se registra y el demonio sigue vivo y sirviendo /status.
+        # Cada sondeo escribe en la base, así que basta la fecha de
+        # modificación: sin abrir la SQLite ni competir con su WAL.
+        if HEXWATCH_DB:
+            try:
+                escrito = max(os.path.getmtime(f) for f in
+                              (HEXWATCH_DB, HEXWATCH_DB + '-wal') if os.path.exists(f))
+            except ValueError:
+                return "Sin base 🔴"
+            except Exception:
+                return "Error al mirar la base ⚠️"
+            quieta = time.time() - escrito
+            if quieta > HEXWATCH_SIN_DATOS_MAX:
+                return f"No guarda en disco desde hace {int(quieta) // 60} min 🔴"
         return "Activo 🟢"
     edad = estado.get('data_age_s')
     if edad is None:
