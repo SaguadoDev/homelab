@@ -60,6 +60,7 @@ flowchart LR
             og["openGym<br/>web + api<br/>127.0.0.1:8081"]
             arm["Combina<br/>127.0.0.1:3001"]
         end
+        hx["hexwatch<br/>systemd<br/>127.0.0.1:3002"]
     end
 
     subgraph ext ["Servicios externos"]
@@ -67,6 +68,7 @@ flowchart LR
         doh["DNS-over-HTTPS<br/>Quad9 · Cloudflare"]
         drive["Google Drive<br/>copias cifradas GPG"]
         tg["Telegram"]
+        adsb["APIs ADS-B<br/>comunitarias"]
     end
 
     movil -->|"https"| tsd
@@ -78,10 +80,12 @@ flowchart LR
     tsd -->|":8443"| api
     tsd -->|":8444"| og
     tsd -->|":8445"| arm
+    tsd -->|":8446"| hx
     api --> pg
     arm --> pg
     adg -->|"DoH"| doh
     arm -->|"autotag"| gem
+    hx -->|"sondeo 30 s"| adsb
     bot -.->|"docker inspect"| docker
     bot -->|"alertas"| tg
     vw -.->|"03:00"| drive
@@ -104,6 +108,7 @@ Detalle, flujos y redes de Docker en
 | **Vault App** | API propia de finanzas personales (Fastify + PostgreSQL) | `https://<host>.<tailnet>.ts.net:8443` |
 | **openGym** | Registro de entrenamientos y peso corporal para dos personas, sin suscripción y con el historial en casa | `https://<host>.<tailnet>.ts.net:8444` |
 | **Combina** | API de respaldo y sincronización de una aplicación Android de armario digital, con proxy a Gemini para etiquetar la ropa | `https://<host>.<tailnet>.ts.net:8445` |
+| **hexwatch** | Seguimiento de vuelos: sondea APIs ADS-B comunitarias para unas aeronaves concretas y le dice a una app móvil propia si están en su base o fuera, y desde cuándo | `https://<host>.<tailnet>.ts.net:8446` |
 | **Bot de Telegram** | Toda la observabilidad: alertas de CPU, RAM, disco, temperatura, servicios caídos y copias con retraso | Telegram |
 | **Tailscale** | Red privada, terminación TLS y nodo de salida | — |
 | **Cockpit** | Panel de administración del host | `:9090` |
@@ -218,6 +223,9 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
       Ubuntu limpia a servidor completo ([recuperación](docs/recuperacion.md)).
 - [ ] **Probar la restauración automáticamente.** El ensayo en VM cubre
       las cinco copias de una vez, pero se lanza a mano.
+- [ ] **hexwatch no tiene copia.** Su SQLite (sondeos y eventos) no entra
+      en ninguna copia nocturna ni en `restaurar-servidor.sh`. El servicio
+      se reconstruye en cinco minutos desde su repo; el histórico, no.
 - [ ] **Una tercera copia fuera de Google.** Datos, sistema y repos viven
       en Drive. Un `rclone sync gdrive:` a un disco externo de vez en
       cuando; ya va todo cifrado.
@@ -271,6 +279,7 @@ Los marcadores que aparecen:
 | `<host>.<tailnet>.ts.net` | El nombre MagicDNS de la máquina |
 | `<IP_LAN>` | Su IP en la red local |
 | `/home/homelab/` | El directorio del usuario de servicio |
+| `<repo-hexwatch>` | El nombre del repo de la app de seguimiento de vuelos |
 | `<tu-correo>@example.com` | La cuenta de correo del SMTP |
 | `<token-...>`, `<contraseña-...>` | Secretos, que viven en `.env` fuera de git |
 

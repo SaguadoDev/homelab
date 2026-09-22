@@ -16,6 +16,7 @@ comandos se ejecutan desde ese directorio.
 ├── vault_app/
 ├── opengym/
 ├── Combina/        <- el clon del repo de la app: aquí SÍ coinciden
+├── <repo-hexwatch>/ <- ídem, y su unidad de systemd se enlaza desde /etc
 └── bot/
 ```
 
@@ -27,7 +28,8 @@ directorio de ejecución (o al revés, y se hace commit).
 `/etc/systemd/system/server-bot.service` y
 `/etc/systemd/system/docker.service.d/after-tailscaled.conf` son *symlinks*
 a `systemd/` de este repo, así que no hay copia que sincronizar: se edita
-aquí y basta un `daemon-reload`. Se hizo así
+aquí y basta un `daemon-reload`. La de hexwatch sigue el mismo patrón, pero
+enlazada al repo de su aplicación. Se hizo así
 porque la variante de "copiar a mano" ya falló una vez — el repo llevaba
 meses con nombres de contenedor que no existían, y seguir el procedimiento al
 pie de la letra habría tumbado la vigilancia de Vault App.
@@ -46,7 +48,7 @@ del montaje: un `git clean -xfd` en ese clon se lleva las fotos y el `.env`.
 
 ```bash
 docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
-systemctl status server-bot
+systemctl status server-bot hexwatch
 tailscale status
 tailscale serve status
 ss -tlnp                       # quién escucha realmente, y en qué interfaz
@@ -86,8 +88,9 @@ sudo ~/homelab/scripts/backup-vaultwarden.sh
 ## Publicar un servicio nuevo en el tailnet
 
 1. Que escuche en loopback: `ports: - "127.0.0.1:PUERTO:PUERTO_INTERNO"`.
-2. Elegir un puerto HTTPS libre en el tailnet (443, 8443, 8444 y 8445
-   están cogidos).
+2. Elegir un puerto HTTPS libre en el tailnet (443, 8443, 8444, 8445 y
+   8446 están cogidos) y uno de loopback libre (3000, 3001, 3002, 8080 y
+   8081 lo están). `ss -tlnp` manda sobre esta lista.
 3. Publicarlo:
 
 ```bash
@@ -386,11 +389,62 @@ salvo la copia nocturna.
 
 ---
 
+## hexwatch
+
+### Primera instalación
+
+Sin Docker ni dependencias: basta el `python3` del sistema.
+
+```bash
+git clone <repo-de-la-app> ~/<repo-hexwatch>
+cd ~/<repo-hexwatch>
+cp config.example.json config.json     # aeronaves y base; api_bind 127.0.0.1
+
+sudo ln -sfn ~/<repo-hexwatch>/deploy/hexwatch.service \
+             /etc/systemd/system/hexwatch.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now hexwatch
+
+sudo tailscale serve --bg --https=8446 http://127.0.0.1:3002
+curl -s http://127.0.0.1:3002/status   # "data_ok": true tras el primer sondeo
+```
+
+Y la purga semanal, en el crontab de `server`:
+
+```cron
+0 12 * * 0 cd /home/server/<repo-hexwatch> && /usr/bin/python3 -m hexwatch --config config.json prune --days 90 >> /home/server/<repo-hexwatch>/prune.log 2>&1
+```
+
+**La URL del 8446 va compilada dentro de la app**, como la del 8445 de
+Combina.
+
+### Actualizar
+
+```bash
+cd ~/<repo-hexwatch>
+git pull
+python3 -m unittest discover -s tests    # sin pytest ni dependencias
+sudo systemctl restart hexwatch
+journalctl -u hexwatch -f
+```
+
+Si cambia la unidad, `sudo systemctl daemon-reload` antes del `restart`:
+el *symlink* ya apunta al fichero nuevo.
+
+### Añadir o quitar aeronaves
+
+Se edita `aircraft` en `config.json` y `sudo systemctl restart hexwatch`.
+Todo va indexado por hex: una aeronave nueva arranca limpia y una que se
+quita conserva su histórico, ignorado.
+
+---
+
 ## Logs
 
 ```bash
 docker compose logs -f --tail=100      # por servicio
 journalctl -u server-bot -f            # bot
+journalctl -u hexwatch -f              # seguimiento de vuelos
 journalctl -u tailscaled --since -1h   # tailscale (incluye ACME)
 tail -f ~/bot/logs/bot.log             # log propio del bot, rotado a 5 MB
 ```
@@ -433,7 +487,7 @@ y el bot `Restart=always`. La comprobación son dos minutos:
 ```bash
 uptime                                        # confirmar que reinició
 docker ps --format '{{.Names}}\t{{.Status}}'  # los cuatro arriba
-systemctl status server-bot
+systemctl status server-bot hexwatch
 tailscale status
 dig @<IP_LAN> ejemplo.com +short              # DNS de la casa
 dig @<IP_TAILSCALE> ejemplo.com +short        # y del tailnet

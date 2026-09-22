@@ -29,6 +29,9 @@ sudo tailscale serve --bg --https=8444 http://127.0.0.1:8081
 # API del armario digital en el 8445
 sudo tailscale serve --bg --https=8445 http://127.0.0.1:3001
 
+# hexwatch (seguimiento de vuelos) en el 8446
+sudo tailscale serve --bg --https=8446 http://127.0.0.1:3002
+
 sudo tailscale serve status
 ```
 
@@ -39,10 +42,11 @@ https://<host>.<tailnet>.ts.net        -> 127.0.0.1:8080   (Vaultwarden)
 https://<host>.<tailnet>.ts.net:8443   -> 127.0.0.1:3000   (API Vault App)
 https://<host>.<tailnet>.ts.net:8444   -> 127.0.0.1:8081   (openGym)
 https://<host>.<tailnet>.ts.net:8445   -> 127.0.0.1:3001   (API Combina)
+https://<host>.<tailnet>.ts.net:8446   -> 127.0.0.1:3002   (hexwatch)
 ```
 
 Esa URL del 8445 **va compilada dentro del APK** de la aplicación del
-armario, así que cambiarla obliga a recompilar e instalar de nuevo en el
+armario (y la del 8446 en la de hexwatch), así que cambiarla obliga a recompilar e instalar de nuevo en el
 móvil. Se fijó antes de instalar nada, que es la lección que dejaron las
 passkeys: la URL definitiva se decide antes de registrar nada.
 

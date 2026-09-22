@@ -1,4 +1,6 @@
+import json
 import subprocess
+import urllib.request
 from datetime import datetime, timezone
 
 # Las cinco copias nocturnas en Drive y a qué hora deberían estar subidas.
@@ -166,6 +168,41 @@ def comprobar_combina():
             return "Sin base de datos 🟡"
     except Exception:
         return "Activo 🟢"  # El contenedor corre aunque no podamos leer health
+
+
+def comprobar_hexwatch():
+    """Comprueba hexwatch, el seguimiento de vuelos, que corre en systemd.
+
+    No es un contenedor: se mira la unidad y luego su propia API por
+    loopback, que es lo mismo que ve la app a través de `tailscale serve`.
+
+    `data_ok` es falso cuando ninguna fuente ADS-B responde (caída de las
+    APIs comunitarias, o backoff tras un 429). El proceso está sano pero lo
+    que sirve es viejo: se pinta en amarillo y **no alerta**, porque no es
+    un fallo de este servidor ni hay nada que arreglar desde aquí.
+    """
+    try:
+        activo = subprocess.run(
+            ['systemctl', 'is-active', 'hexwatch'],
+            capture_output=True, text=True, timeout=10
+        ).stdout.strip()
+    except subprocess.TimeoutExpired:
+        return "Timeout ⚠️"
+    except Exception:
+        return "Error / Inaccesible ⚠️"
+
+    if activo != 'active':
+        return "Detenido 🔴"
+
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:3002/status', timeout=5) as r:
+            estado = json.load(r)
+    except Exception:
+        return "API sin responder 🔴"
+
+    if estado.get('data_ok'):
+        return "Activo 🟢"
+    return f"Sin datos ADS-B hace {estado.get('data_age_s', '?')} s 🟡"
 
 
 def comprobar_tailscale():

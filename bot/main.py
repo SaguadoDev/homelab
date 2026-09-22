@@ -256,6 +256,7 @@ def _generar_servicios():
     vault_app = servicios.comprobar_vault_app()
     opengym = servicios.comprobar_opengym()
     combina = servicios.comprobar_combina()
+    hexwatch = servicios.comprobar_hexwatch()
     tailscale = servicios.comprobar_tailscale()
     conectividad = servicios.comprobar_conectividad()
 
@@ -273,6 +274,7 @@ def _generar_servicios():
         f"• Vault App: {vault_app}\n"
         f"• openGym: {opengym}\n"
         f"• Combina: {combina}\n"
+        f"• hexwatch: {hexwatch}\n"
         f"• Tailscale: {tailscale}\n"
         f"• Internet: {'Conectado 🟢' if conectividad['ok'] else 'Desconectado 🔴'} "
         f"(`{ping_str}`)"
@@ -569,6 +571,17 @@ async def tarea_monitorizacion(app):
                     parse_mode='Markdown',
                 )
                 logger.warning(f"Alerta Combina: {combina}")
+
+            # "Sin datos ADS-B" NO alerta: es una caída de las APIs externas,
+            # no de este servidor, y no hay nada que arreglar desde aquí.
+            hexwatch = servicios.comprobar_hexwatch()
+            if any(x in hexwatch for x in ("sin responder", "Detenido", "Error")) and deberia_alertar('hexwatch'):
+                await app.bot.send_message(
+                    chat_id=config.TELEGRAM_CHAT_ID,
+                    text=f"🚨 *ALERTA* hexwatch tiene problemas.\nEstado: {hexwatch}",
+                    parse_mode='Markdown',
+                )
+                logger.warning(f"Alerta hexwatch: {hexwatch}")
 
             # --- Copias en Drive: una vez al día, pasadas las 07:00 ---
             # A esa hora las cinco ya deberían estar subidas (la última, la

@@ -22,7 +22,7 @@ Dos cosas a la vez, en el mismo proceso:
 | Comando | Qué devuelve |
 |---|---|
 | `/estado` | CPU, RAM, disco y temperatura, con barras de progreso |
-| `/servicios` | AdGuard, Vaultwarden, Vault App, openGym, Combina y Tailscale |
+| `/servicios` | AdGuard, Vaultwarden, Vault App, openGym, Combina, hexwatch y Tailscale |
 | `/uptime` | Tiempo activo del sistema |
 | `/red` | IP local y tráfico acumulado |
 | `/procesos` | Top 5 por CPU |
@@ -64,6 +64,13 @@ en local, y lo único que pasa es que deja de sincronizar — en silencio y
 durante días, si nadie mira. No se comprueba su Postgres porque es el
 compartido, que ya vigila el estado de Vault App: duplicarlo duplicaría la
 alerta cuando lo que falla es la base y no el servicio.
+
+**hexwatch se mira por systemd y por su API, no por Docker.** Primero
+`systemctl is-active hexwatch`, después un `GET /status` por loopback.
+`Detenido 🔴` y `API sin responder 🔴` alertan; `Sin datos ADS-B 🟡`
+—el proceso está sano pero ninguna API comunitaria le responde— solo se
+ve en `/servicios`. Avisar de una caída ajena que no se puede arreglar
+desde aquí sería justo el tipo de alarma que acaba silenciada.
 
 ## Instalación
 

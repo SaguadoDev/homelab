@@ -85,7 +85,7 @@ servidor como DNS. Todos los dispositivos de casa resuelven contra
 AdGuard sin configurar nada en cada uno.
 
 **3. Desde el propio host — loopback.** Vaultwarden, la API de Vault,
-openGym y Combina publican sus puertos **solo** en `127.0.0.1`. Quien los saca al
+openGym, Combina y hexwatch escuchan **solo** en `127.0.0.1`. Quien los saca al
 tailnet es `tailscale serve`, que corre en el host y por tanto los ve por
 loopback. Ningún servicio de aplicación es alcanzable directamente desde
 la LAN.
