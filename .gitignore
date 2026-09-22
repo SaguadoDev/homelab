@@ -17,6 +17,9 @@ services/*/backups/
 services/*/media/
 *.sqlite3
 *.sqlite3-*
+*.db
+*.db-wal
+*.db-shm
 *.dump
 *.tar.gz
 

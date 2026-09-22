@@ -325,6 +325,10 @@ fuera y no hay nada que arreglar desde aquí.
 **Purga semanal** de los sondeos vacíos de más de 90 días, desde el cron de
 `server` (domingo 12:00). Los sondeos con posición se guardan siempre.
 
+**Presupuesto de disco:** ~1 MB al día **por aeronave** sin podar (con
+tres, ~1 GB al año); la purga lo deja en una fracción. Las peticiones a las
+redes, en cambio, **no crecen** con la flota: 2.880 al día por fuente.
+
 **Sin copia nocturna todavía.** Ver *Pendiente* en el README.
 
 ---
