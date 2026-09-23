@@ -3,8 +3,8 @@
 # Sistema — copia diaria cifrada a Google Drive de TODO lo que no es dato de
 # servicio ni se regenera desde un repo.
 #
-# Las otras cuatro copias salvan los datos (bóveda, bases, entrenamientos,
-# armario). Esta salva lo que hace falta para volver a montar la máquina que
+# Las otras cinco copias salvan los datos (bóveda, bases, entrenamientos,
+# armario, seguimiento de vuelos). Esta salva lo que hace falta para volver a montar la máquina que
 # los sirve: la identidad de Tailscale, la configuración de AdGuard, los
 # .env con los secretos, los dos cron, los composes tal y como corren (no la
 # versión saneada del repo), la red del host y los ficheros de /etc que se
@@ -36,7 +36,9 @@
 # Tamaño esperado: 100–300 KB. Mínimo para dar la copia por buena: 20 KB.
 #
 # Además del tar, en la misma carpeta de Drive:
-#   repos/<nombre>-<hash>.bundle.gpg   git bundle de homelab, vault_app y Combina,
+#   repos/<nombre>-<hash>.bundle.gpg   git bundle de homelab, vault_app, Combina
+#                                      y el de hexwatch (su nombre sale de
+#                                      ~/.config/hexwatch.env, no de aquí),
 #                                      cifrado, renovado solo cuando cambia HEAD.
 #                                      Con esto la restauración no necesita
 #                                      GitHub ni ningún token: todo el kit es
@@ -60,7 +62,8 @@
 #   sudo crontab -e
 #   0 6 * * * /home/server/homelab/scripts/backup-sistema.sh >> /var/log/backup-sistema.log 2>&1
 #
-# A las 06:00, después de las otras cuatro, para no competir con ellas.
+# A las 06:00, después de las cuatro de datos que hay antes, para no competir
+# con ellas. La de hexwatch va después, a las 06:30.
 #
 # --dry-run: lista lo que entraría, con tamaños, y lo que no se puede leer;
 # no cifra ni sube nada. Sirve para probar el script sin ser root (dirá qué
@@ -190,12 +193,25 @@ RUTAS_HOME=(
   Combina/.env
   Combina/docker-compose.yml
   bot/.env
+  .config/hexwatch.env
   .config/rclone/rclone.conf
   .gitconfig
   .bashrc
   .ssh/authorized_keys
   .claude/settings.json
 )
+# hexwatch: su directorio no se escribe aquí (el repo de la app es privado y
+# este no lo nombra); sale de ~/.config/hexwatch.env, que entra en el tar
+# justo arriba. Del directorio solo hace falta config.json: la base tiene su
+# propia copia y el código vuelve del bundle.
+HEXWATCH_DIR=""; HEXWATCH_REPO=""
+if [ -r "$HOME_USR/.config/hexwatch.env" ]; then
+  HEXWATCH_DIR=$(sed -n 's/^HEXWATCH_DIR=//p' "$HOME_USR/.config/hexwatch.env" | tail -1)
+fi
+if [ -n "$HEXWATCH_DIR" ]; then
+  RUTAS_HOME+=("${HEXWATCH_DIR#"$HOME_USR"/}/config.json")
+  HEXWATCH_REPO=$(basename "$HEXWATCH_DIR")
+fi
 shopt -s nullglob
 for d in "$HOME_USR"/.claude/projects/*/memory; do
   RUTAS_HOME+=("${d#"$HOME_USR"/}")
@@ -263,12 +279,12 @@ if [ "$(date +%d)" = "01" ]; then
 fi
 
 # ── repos como git bundle ────────────────────────────────────────────────
-# Los tres repos enteros (historia incluida), cifrados, solo cuando HEAD ha
-# cambiado desde la última subida. Son ~3 MB en total. vault_app y Combina
-# son privados en GitHub: sin esto, restaurar exigiría un token que habría
+# Los repos enteros (historia incluida), cifrados, solo cuando HEAD ha
+# cambiado desde la última subida. Son ~3 MB en total. vault_app, Combina y
+# el de hexwatch son privados en GitHub: sin esto, restaurar exigiría un token que habría
 # que guardar en algún sitio; con esto, la única llave es la passphrase.
 EXISTENTES=$(rclone lsf "$REMOTE_RCLONE/repos/" 2>/dev/null || true)
-for repo in homelab vault_app Combina; do
+for repo in homelab vault_app Combina $HEXWATCH_REPO; do
   DIR="$HOME_USR/$repo"
   [ -d "$DIR/.git" ] || { log "[WARN] $DIR no es un repo; se omite"; continue; }
   HASH=$(git -c safe.directory='*' -C "$DIR" rev-parse --short=12 HEAD)
@@ -296,8 +312,7 @@ hace falta SOLO la passphrase (en papel) y esta carpeta.
 2. Descargar desde esta carpeta (drive.google.com, con el navegador) a
    una carpeta ~/kit de la máquina nueva:
      - el sistema_FECHA.tar.gz.gpg más reciente
-     - repos/homelab-*.bundle.gpg, repos/vault_app-*.bundle.gpg,
-       repos/Combina-*.bundle.gpg
+     - todos los repos/*.bundle.gpg
 3. Sacar el script (o `git clone https://github.com/SaguadoDev/homelab`):
      gpg -d ~/kit/homelab-*.bundle.gpg > ~/kit/homelab.bundle
      git clone ~/kit/homelab.bundle ~/homelab

@@ -5,7 +5,7 @@ import time
 import urllib.request
 from datetime import datetime, timezone
 
-# Las cinco copias nocturnas en Drive y a qué hora deberían estar subidas.
+# Las seis copias nocturnas en Drive y a qué hora deberían estar subidas.
 # Las horas son las de docs/backups.md; el umbral de 30 h deja margen a un
 # día entero de retraso (un corte de luz a las 03:00) sin gritar, pero grita
 # antes de que la rotación a 7 días empiece a comerse copias buenas.
@@ -15,6 +15,7 @@ COPIAS = (
     ("openGym",     "gdrive:openGym_Backups",     "opengym_"),
     ("Combina",     "gdrive:Armario_Backups",     "armario_"),
     ("Sistema",     "gdrive:Sistema_Backups",     "sistema_"),
+    ("hexwatch",    "gdrive:Hexwatch_Backups",    "hexwatch_"),
 )
 COPIAS_HORAS_MAX = 30
 

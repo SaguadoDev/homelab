@@ -214,7 +214,7 @@ async def cmd_alertas(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 @solo_autorizado
 async def cmd_copias(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Edad de las cinco copias nocturnas en Drive."""
+    """Edad de las seis copias nocturnas en Drive."""
     texto, teclado = _generar_copias()
     await update.message.reply_text(
         texto, parse_mode='Markdown',
@@ -585,9 +585,9 @@ async def tarea_monitorizacion(app):
                 logger.warning(f"Alerta hexwatch: {hexwatch}")
 
             # --- Copias en Drive: una vez al día, pasadas las 07:00 ---
-            # A esa hora las cinco ya deberían estar subidas (la última, la
-            # del sistema, a las 06:00). Mirar Drive cada minuto sería pagar
-            # cinco llamadas a la API por nada; una al día basta, y el
+            # A esa hora las seis ya deberían estar subidas (la última, la
+            # de hexwatch, a las 06:30). Mirar Drive cada minuto sería pagar
+            # seis llamadas a la API por nada; una al día basta, y el
             # cooldown normal no aplica: si falta una copia se avisa cada día
             # hasta que vuelva a llegar.
             global _copias_revisadas_el
@@ -608,7 +608,7 @@ async def tarea_monitorizacion(app):
                         )
                         logger.warning(f"Alerta copias: {[c['nombre'] for c in malas]}")
                     else:
-                        logger.info("Revisión de copias: las cinco al día")
+                        logger.info("Revisión de copias: las seis al día")
 
         except Exception as e:
             logger.error(f"Error en monitorización: {e}")

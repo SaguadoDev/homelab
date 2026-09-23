@@ -18,7 +18,7 @@ Hace falta **la passphrase** (el papel) y **la cuenta de Google**. Nada más.
    y hostname `server`. Cable de red.
 
 2. Con el navegador, en drive.google.com, carpeta Sistema_Backups: bajar a
-   ~/kit el sistema_FECHA.tar.gz.gpg más reciente y los tres
+   ~/kit el sistema_FECHA.tar.gz.gpg más reciente y todos los
    repos/*.bundle.gpg. (Hay un LEEME.txt en la carpeta con estos pasos.)
 
 3. git clone https://github.com/SaguadoDev/homelab
@@ -49,7 +49,7 @@ fuera del servidor.
 **Nada se teclea salvo la passphrase.** `rclone.conf`, los `.env`, los
 composes, el cron, la configuración de AdGuard y la identidad de Tailscale
 vienen del tar del sistema; el código, de los bundles; los datos, de las
-cuatro copias de siempre. Si el script pide algo más, es un fallo del
+cinco copias de siempre. Si el script pide algo más, es un fallo del
 script.
 
 ### Lo que hace, fase a fase
@@ -59,15 +59,16 @@ script.
 | 1 | Paquetes: Docker, Tailscale, rclone, gnupg, sqlite3, dig, jq, cockpit, pcp | apt |
 | 2 | Passphrase en su sitio; descifra el tar del kit (o baja el último de Drive); verifica `SHA256SUMS`; saca `rclone.conf` del tar | kit + `Sistema_Backups` |
 | 3 | `/etc`: resolved (host → 1.1.1.1), `daemon.json`, sysctl del exit node, claves SSH del host, gdm3, hostname, netplan con la IP fija | tar del sistema |
-| 4 | Clona `homelab`, `vault_app`, `Combina` desde los bundles (kit, o `Sistema_Backups/repos/`; GitHub solo si no hay); coloca composes vivos, `.env`, scripts de backup, dotfiles, memoria de Claude, `~/adguard/conf`; crea `~/bot` con su venv | bundles + tar |
+| 4 | Clona `homelab`, `vault_app`, `Combina` y el repo de hexwatch (ruta y URL de `~/.config/hexwatch.env`, que viene en el tar) desde los bundles (kit, o `Sistema_Backups/repos/`; GitHub solo si no hay); coloca composes vivos, `.env`, scripts de backup, dotfiles, memoria de Claude, `~/adguard/conf`; crea `~/bot` con su venv | bundles + tar |
 | 5 | Restaura `tailscaled.state`: misma IP, mismo nombre, mismos `serve`, sin login. Aborta si el nodo no se llama `server` | tar |
 | 6 | AdGuard con el drop-in `After=tailscaled`; comprueba bloqueo, split DNS y `bind_hosts` con la IP del tailnet | tar |
 | 7 | Vaultwarden: `vw-data` de la copia; comprueba `/alive`, `prelogin` y que `rsa_key.pem` no cambia | `Vaultwarden_Backups` |
 | 8 | Postgres solo → `pg_restore` de `vault` → API (`--build`) | `Vault_Backups` |
 | 9 | Rol y base `armario` en el Postgres compartido → `pg_restore` → fotos → API (`--build`) | `Armario_Backups` |
 | 10 | openGym: `data/` de la copia; comprueba que `secret` no cambia y que `RP_ID` es el nodo | `openGym_Backups` |
-| 11 | Bot (symlink de la unidad) y los dos cron, con la línea de `backup-sistema.sh` | tar |
-| 12 | `docker ps`, los cuatro `https://`, opcionalmente las cinco copias a mano (`--con-backups`); borra `/root/restauracion` | — |
+| 11 | hexwatch: `hexwatch.db` de la copia (con `integrity_check`), symlink de la unidad a su repo, arranque y `/status` | `Hexwatch_Backups` |
+| 12 | Bot (symlink de la unidad) y los dos cron, con la línea de `backup-sistema.sh` | tar |
+| 13 | `docker ps`, los cinco `https://`, opcionalmente las seis copias a mano (`--con-backups`); borra `/root/restauracion` | — |
 
 Cada fase comprueba antes de actuar: relanzar el script entero es seguro.
 `--solo N` ejecuta una fase; `--desde N` retoma.
@@ -83,8 +84,9 @@ Lo que ningún script puede hacer y se olvida:
    autenticar para heredar el nombre; aprobar el exit node; cambiar el
    nameserver global del tailnet a la IP nueva ([decisión §13](decisiones.md#13-adguard-como-dns-del-tailnet-no-solo-de-la-lan)).
 3. **Clientes.** Con el mismo nombre MagicDNS, Bitwarden, las passkeys de
-   openGym y el APK de Combina siguen funcionando sin tocar nada. Si el
-   nombre cambió: re-registrar las passkeys y recompilar el APK.
+   openGym y las apps de Combina y hexwatch siguen funcionando sin tocar
+   nada. Si el nombre cambió: re-registrar las passkeys y recompilar las
+   dos apps.
 4. **SSH.** Si no se restauraron las `ssh_host_*`, borrar la entrada vieja
    de `known_hosts` en los clientes.
 
@@ -111,9 +113,10 @@ cualquier navegador.
 
 - `sistema_FECHA.tar.gz.gpg` — con `rclone.conf` dentro, entre lo demás.
 - `repos/homelab-HASH.bundle.gpg`, `repos/vault_app-HASH.bundle.gpg`,
-  `repos/Combina-HASH.bundle.gpg` — los tres repos enteros, renovados
-  cuando cambia `HEAD`. Sin ellos haría falta un token de GitHub para los
-  dos privados, y ese token tendría que guardarse en algún sitio.
+  `repos/Combina-HASH.bundle.gpg` y el del repo de hexwatch — los cuatro
+  repos enteros, renovados cuando cambia `HEAD`. Sin ellos haría falta un
+  token de GitHub para los tres privados, y ese token tendría que
+  guardarse en algún sitio.
 - `LEEME.txt` — los cuatro pasos, para quien abra la carpeta dentro de
   tres años.
 

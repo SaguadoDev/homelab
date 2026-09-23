@@ -409,11 +409,25 @@ sudo tailscale serve --bg --https=8446 http://127.0.0.1:3002
 curl -s http://127.0.0.1:3002/status   # "data_ok": true tras el primer sondeo
 ```
 
-Y la purga semanal, en el crontab de `server`:
+La ruta real, fuera de cualquier repo, para los scripts de copia y de
+restauración (este repo no nombra el de la app):
+
+```bash
+umask 077; cat > ~/.config/hexwatch.env <<EOF
+HEXWATCH_DIR=/home/server/<repo-hexwatch>
+HEXWATCH_REPO_URL=<url-del-repo-privado>
+EOF
+```
+
+Y en el crontab de `server`, la purga semanal y la copia nocturna:
 
 ```cron
 0 12 * * 0 cd /home/server/<repo-hexwatch> && /usr/bin/python3 -m hexwatch --config config.json prune --days 90 >> /home/server/<repo-hexwatch>/prune.log 2>&1
+30 6 * * * /home/server/homelab/scripts/backup-hexwatch.sh >> /home/server/.local/state/backup-hexwatch.log 2>&1
 ```
+
+La primera copia, a mano, para ver que termina en "Copia finalizada":
+`~/homelab/scripts/backup-hexwatch.sh`.
 
 **La URL del 8446 va compilada dentro de la app**, como la del 8445 de
 Combina.
@@ -494,7 +508,7 @@ dig @<IP_TAILSCALE> ejemplo.com +short        # y del tailnet
 ```
 
 El bot manda un mensaje de arranque; si no llega, empezar por ahí. A la
-mañana siguiente, `/copias` en el bot: las cinco tienen que haber llegado.
+mañana siguiente, `/copias` en el bot: las seis tienen que haber llegado.
 
 ---
 

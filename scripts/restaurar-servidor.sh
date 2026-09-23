@@ -14,12 +14,12 @@
 #
 # Todo lo demás —rclone.conf, .env, composes, cron, AdGuard, la identidad de
 # Tailscale con su IP y sus `serve`, la red del host— sale del tar de
-# `backup-sistema.sh`; los repos, de los bundles; y los datos, de las cuatro
+# `backup-sistema.sh`; los repos, de los bundles; y los datos, de las cinco
 # copias de siempre. Sin kit local también funciona: con rclone.conf a mano
 # (o `rclone config`) lo baja todo de Drive, y los repos privados de GitHub
 # con un token si no hay bundle.
 #
-# Doce fases, en orden, idempotentes: cada una comprueba el estado antes de
+# Trece fases, en orden, idempotentes: cada una comprueba el estado antes de
 # actuar y se puede relanzar. `--desde N` retoma desde una fase (por ejemplo
 # tras perder la sesión SSH cuando la IP fija entra en vigor en la fase 3).
 #
@@ -33,7 +33,7 @@
 #   --repos-desde DIR  clonar vault_app, Combina y homelab desde DIR/<nombre>
 #                      en vez de GitHub (ensayo: clones locales montados)
 #   --extras           instalar también brave-browser, npm y fastfetch
-#   --con-backups      en la fase 12, lanzar los cinco scripts de copia
+#   --con-backups      en la fase 13, lanzar los seis scripts de copia
 #   --ensayo           modo VM: no toca la IP fija ni el hostname, no restaura
 #                      la identidad de Tailscale, no instala cron ni bot, y
 #                      AdGuard escucha en la IP de la VM. Nunca en producción.
@@ -55,7 +55,8 @@ REMOTE_VW="gdrive:Vaultwarden_Backups"
 REMOTE_VAULT="gdrive:Vault_Backups"
 REMOTE_OG="gdrive:openGym_Backups"
 REMOTE_ARM="gdrive:Armario_Backups"
-TRABAJO="/root/restauracion"                    # tar descifrado y descargas; se borra en la fase 12
+REMOTE_HEX="gdrive:Hexwatch_Backups"
+TRABAJO="/root/restauracion"                    # tar descifrado y descargas; se borra en la fase 13
 BUNDLES="/tmp/restauracion-bundles"             # bundles descifrados (código, no secretos); el usuario los clona
 SIS="$TRABAJO/sistema"
 PASSPHRASE_FILE="$HOME_USR/.config/vault/backup-passphrase"
@@ -124,6 +125,20 @@ descifrar() {
 }
 compose_healthy() { # compose_healthy contenedor
   [ "$(docker inspect -f '{{.State.Health.Status}}' "$1" 2>/dev/null)" = "healthy" ]
+}
+# hexwatch: su repo es privado y este no lo nombra. La ruta y la URL salen de
+# ~/.config/hexwatch.env, que viaja en el tar del sistema (fase 2) y se
+# instala en la fase 4. Vacío = hexwatch no estaba instalado.
+HEXWATCH_DIR=""; HEXWATCH_REPO_URL=""
+cargar_hexwatch_env() {
+  local f
+  for f in "$SIS/home/.config/hexwatch.env" "$HOME_USR/.config/hexwatch.env"; do
+    if [ -r "$f" ]; then
+      HEXWATCH_DIR=$(sed -n 's/^HEXWATCH_DIR=//p' "$f" | tail -1)
+      HEXWATCH_REPO_URL=$(sed -n 's/^HEXWATCH_REPO_URL=//p' "$f" | tail -1)
+      return 0
+    fi
+  done
 }
 ip_local() { ip -4 route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i=="src") print $(i+1)}' | head -1; }
 
@@ -325,7 +340,7 @@ if toca_fase 4; then fase 4 "Repos, home, secretos, bot"
         if [ -n "$KIT" ] && [ -s "$KIT/github-token" ]; then
           install -m 600 "$KIT/github-token" "$TRABAJO/github-token"
         else
-          read -r -s -p "Sin bundle de $nombre. Token de GitHub con lectura de vault_app y Combina: " TK; echo
+          read -r -s -p "Sin bundle de $nombre. Token de GitHub con lectura de los repos privados: " TK; echo
           printf '%s' "$TK" > "$TRABAJO/github-token"; chmod 600 "$TRABAJO/github-token"; unset TK
         fi
       fi
@@ -337,6 +352,10 @@ if toca_fase 4; then fase 4 "Repos, home, secretos, bot"
   clonar homelab   "$REPO_URL_HOMELAB"   "$HOME_USR/homelab"
   clonar vault_app "$REPO_URL_VAULT_APP" "$HOME_USR/vault_app"
   clonar Combina   "$REPO_URL_COMBINA"   "$HOME_USR/Combina"
+  cargar_hexwatch_env
+  if [ -n "$HEXWATCH_DIR" ]; then
+    clonar "$(basename "$HEXWATCH_DIR")" "$HEXWATCH_REPO_URL" "$HEXWATCH_DIR"
+  fi
 
   # Ficheros vivos del tar → home, conservando la estructura. Pisa los del
   # repo (los del repo están saneados; los vivos son los que corren).
@@ -344,7 +363,7 @@ if toca_fase 4; then fase 4 "Repos, home, secretos, bot"
   ( cd "$SIS/home" && find . -type f -print0 | while IFS= read -r -d '' f; do
       install -D -m "$(stat -c %a "$f")" -o "$USUARIO" -g "$USUARIO" "$f" "$HOME_USR/$f"
     done )
-  for e in vault_app/server/.env opengym/.env Combina/.env bot/.env .config/rclone/rclone.conf; do
+  for e in vault_app/server/.env opengym/.env Combina/.env bot/.env .config/rclone/rclone.conf .config/hexwatch.env; do
     [ -f "$HOME_USR/$e" ] && chmod 600 "$HOME_USR/$e"
   done
   ok "composes, .env, scripts de backup, dotfiles y memoria de Claude en su sitio"
@@ -584,7 +603,36 @@ if toca_fase 10; then fase 10 "openGym"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
-if toca_fase 11; then fase 11 "Bot y cron"
+if toca_fase 11; then fase 11 "hexwatch (seguimiento de vuelos)"
+  cargar_hexwatch_env
+  if [ -z "$HEXWATCH_DIR" ]; then
+    ok "sin ~/.config/hexwatch.env en el tar: hexwatch no estaba instalado"
+  else
+    [ -d "$HEXWATCH_DIR/.git" ] || fallo "falta el clon de hexwatch en $HEXWATCH_DIR: ejecutar la fase 4"
+    [ -f "$HEXWATCH_DIR/config.json" ] || fallo "falta $HEXWATCH_DIR/config.json (viene del tar del sistema, fase 4)"
+    if [ -f "$HEXWATCH_DIR/hexwatch.db" ]; then
+      ok "hexwatch.db ya existe; no se pisa"
+    else
+      descargar_y_descifrar "$REMOTE_HEX" hexwatch_ "$TRABAJO/hexwatch.tar.gz"
+      mkdir -p "$TRABAJO/hexwatch" && tar -xzf "$TRABAJO/hexwatch.tar.gz" -C "$TRABAJO/hexwatch"
+      [ "$(sqlite3 "$TRABAJO/hexwatch/hexwatch.db" 'PRAGMA integrity_check;')" = ok ] \
+        || fallo "la copia de hexwatch no pasa integrity_check"
+      install -m 644 -o "$USUARIO" -g "$USUARIO" "$TRABAJO/hexwatch/hexwatch.db" "$HEXWATCH_DIR/hexwatch.db"
+      ok "hexwatch.db restaurada ($(sqlite3 "$HEXWATCH_DIR/hexwatch.db" 'select count(*) from polls') sondeos, $(sqlite3 "$HEXWATCH_DIR/hexwatch.db" 'select count(*) from events') eventos)"
+    fi
+    # La unidad es un symlink al repo de la app, como la del bot al de homelab.
+    ln -sfn "$HEXWATCH_DIR/deploy/hexwatch.service" /etc/systemd/system/hexwatch.service
+    systemctl daemon-reload
+    # También en ensayo: no sube nada y solo lee APIs públicas, así que
+    # arrancarlo es la única forma de ver que la base restaurada vale.
+    systemctl enable --now hexwatch >/dev/null
+    esperar "API de hexwatch responde" 60 sh -c 'curl -sf http://127.0.0.1:3002/status >/dev/null'
+    ok "hexwatch: $(curl -s http://127.0.0.1:3002/status | jq -r '.aircraft | length') aeronave(s) configurada(s)"
+  fi
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
+if toca_fase 12; then fase 12 "Bot y cron"
   if [ $ENSAYO = 1 ]; then
     ok "ensayo: ni bot (dos bots con el mismo token se pisan) ni cron (subiría copias duplicadas a Drive)"
   else
@@ -607,7 +655,7 @@ if toca_fase 11; then fase 11 "Bot y cron"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
-if toca_fase 12; then fase 12 "Verificación"
+if toca_fase 13; then fase 13 "Verificación"
   echo "   Contenedores:"
   docker ps -a --format '     {{.Names}}\t{{.Status}}' | sort
   # "starting" no es fallo: el healthcheck de openGym sondea cada 5 minutos.
@@ -615,17 +663,17 @@ if toca_fase 12; then fase 12 "Verificación"
   [ -z "$NO_SANOS" ] && ok "todos los contenedores healthy (o arrancando)" || log "[WARN] sin healthy: $NO_SANOS"
   if [ $ENSAYO = 0 ] || [ $CON_TAILSCALE = 1 ]; then
     HOST_TS=$(tailscale status --json | jq -r .Self.DNSName | sed 's/\.$//')
-    for p in 443 8443 8444 8445; do
+    for p in 443 8443 8444 8445 8446; do
       C=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 10 "https://$HOST_TS:$p/" || echo 000)
       echo "     https://$HOST_TS:$p → HTTP $C"
     done
   fi
   if [ $CON_BACKUPS = 1 ] && [ $ENSAYO = 0 ]; then
-    echo "   Lanzando las cinco copias a mano:"
+    echo "   Lanzando las seis copias a mano:"
     for s in "$HOME_USR/vaultwarden/backup_vaultwarden.sh" "$HOME_USR/opengym/backup-opengym.sh" "$HOME_USR/homelab/scripts/backup-sistema.sh"; do
       bash "$s" 2>&1 | tail -1 | sed 's/^/     /'
     done
-    for s in "$HOME_USR/vault_app/server/scripts/backup-to-drive.sh" "$HOME_USR/Combina/server/scripts/backup-combina.sh"; do
+    for s in "$HOME_USR/vault_app/server/scripts/backup-to-drive.sh" "$HOME_USR/Combina/server/scripts/backup-combina.sh" "$HOME_USR/homelab/scripts/backup-hexwatch.sh"; do
       como_usuario bash "$s" 2>&1 | tail -1 | sed 's/^/     /'
     done
   fi
@@ -637,8 +685,9 @@ if toca_fase 12; then fase 12 "Verificación"
      1. Router: reserva DHCP de 192.168.1.50 para la MAC nueva; DNS de la LAN → 192.168.1.50.
      2. Consola de Tailscale, SOLO si el nodo salió con otra IP: nameserver global,
         exit node aprobado, nodo viejo borrado.
-     3. Clientes: Bitwarden, openGym (passkeys) y el APK de Combina siguen si el
-        nombre MagicDNS es el mismo. Si no, re-registrar passkeys y recompilar.
+     3. Clientes: Bitwarden, openGym (passkeys) y las apps de Combina y hexwatch
+        siguen si el nombre MagicDNS es el mismo. Si no, re-registrar passkeys y
+        recompilar las dos apps.
      4. Si no se restauraron las ssh_host_*: borrar la entrada vieja de known_hosts.
 
    Log completo: $LOG

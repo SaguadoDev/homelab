@@ -1,21 +1,21 @@
 # Copias de seguridad
 
-Cuatro sistemas con datos que no se pueden perder: la bóveda de
-contraseñas, la base de datos financiera, el historial de entrenamientos y
-el armario digital. Cada uno tiene una red remota cifrada y corta; la base
+Cinco sistemas con datos que no se pueden perder: la bóveda de
+contraseñas, la base de datos financiera, el historial de entrenamientos,
+el armario digital y el registro de vuelos. Cada uno tiene una red remota cifrada y corta; la base
 financiera tiene además una local, amplia y barata. Y una quinta copia
 que no es de datos sino del **sistema**: lo que hace falta para volver a
 montar la máquina que los sirve.
 
-| | Vaultwarden | Vault App | openGym | Combina | Sistema |
-|---|---|---|---|---|---|
-| Copia local | — | `pg_dump` a las 03:30, 30 días | — | — | — |
-| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días | 05:30 → Drive, 7 días | 06:00 → Drive, 7 días + mensual |
-| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG |
-| Lanzador | cron de root | cron del usuario | cron de root | cron del usuario | cron de root |
-| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
+| | Vaultwarden | Vault App | openGym | Combina | Sistema | hexwatch |
+|---|---|---|---|---|---|---|
+| Copia local | — | `pg_dump` a las 03:30, 30 días | — | — | — | — |
+| Copia remota | 03:00 → Drive, 7 días | 04:30 → Drive, 7 días | 05:00 → Drive, 7 días | 05:30 → Drive, 7 días | 06:00 → Drive, 7 días + mensual | 06:30 → Drive, 7 días |
+| Formato | `tar.gz` cifrado GPG | `pg_dump -Fc` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG | `tar.gz` cifrado GPG |
+| Lanzador | cron de root | cron del usuario | cron de root | cron del usuario | cron de root | cron del usuario |
+| Cifrado | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico | AES-256 simétrico |
 
-Las cinco remotas comparten passphrase. Ver
+Las seis remotas comparten passphrase. Ver
 [decisiones §6](decisiones.md#6-copias-cifradas-antes-de-salir-de-la-máquina).
 El bot las vigila: `/copias` muestra la edad de la última de cada carpeta
 y avisa cada mañana si alguna pasa de 30 horas.
@@ -46,12 +46,20 @@ sudo crontab -e
 crontab -e
 #   30 4 * * * /home/server/vault_app/server/scripts/backup-to-drive.sh >> /home/server/vault_app/server/backups/backup-drive.log 2>&1
 #   30 5 * * * /home/server/Combina/server/scripts/backup-combina.sh >> /home/server/Combina/logs/backup.log 2>&1
+#   30 6 * * * /home/server/homelab/scripts/backup-hexwatch.sh >> /home/server/.local/state/backup-hexwatch.log 2>&1
 ```
 
 Los cuatro scripts de datos corren desde su copia viva (`~/vaultwarden`,
 `~/opengym`, el clon de cada app); las de `scripts/` de este repo son la
 versión saneada, con `/home/homelab` en vez del usuario real. El del
-sistema es el único que corre directamente desde el repo.
+sistema y el de hexwatch corren directamente desde el repo.
+
+**hexwatch va en el cron del usuario**: la base es suya y no hay docker de
+por medio. Su script está en este repo aunque la aplicación viva en otro,
+privado, que este no nombra: la ruta real la lee de
+`~/.config/hexwatch.env` (`HEXWATCH_DIR=...`), fuera de cualquier repo. Ese
+fichero entra en el tar del sistema, así que la restauración lo recupera
+antes de necesitarlo.
 
 **Combina va en el cron del usuario**, como Vault App: su bind mount de
 imágenes es del usuario del servicio —el contenedor corre como `node`, uid
@@ -128,13 +136,14 @@ lo arregla. Salva los datos, no el acceso.
 repo, para que [`restaurar-servidor.sh`](recuperacion.md) pueda dejar una
 Ubuntu limpia igual que esta: la identidad de Tailscale
 (`tailscaled.state`: clave del nodo, IP, nombre, `serve`), la
-configuración de AdGuard, los dos cron, los `.env` y los composes **tal y
+configuración de AdGuard, los dos cron, los `.env` (y `~/.config/hexwatch.env`
+con el `config.json` de hexwatch) y los composes **tal y
 como corren** (no la versión saneada del repo), la red del host (netplan,
 resolved, `daemon.json`, sysctl), las claves SSH del host, `rclone.conf`,
 dotfiles y la memoria de Claude Code; más un manifiesto (paquetes, snaps,
 imágenes con digest, estado de Tailscale) y `SHA256SUMS`. Unos 300 KB.
 Corre en el cron de root porque casi todo eso es 0600 de root. En la misma
-carpeta deja `repos/<nombre>-<hash>.bundle.gpg` (los tres repos enteros,
+carpeta deja `repos/<nombre>-<hash>.bundle.gpg` (los cuatro repos enteros,
 cifrados, renovados solo cuando cambia `HEAD`, ~3 MB) y un `LEEME.txt`:
 con eso la restauración no necesita GitHub ni ningún token, solo la
 passphrase y la cuenta de Google.
@@ -150,6 +159,18 @@ y los paquetes (los instala el script de restauración), las imágenes de
 Docker (se reconstruyen desde los compose), `opengym/media` (la baja el
 contenedor) y **la passphrase**, que no puede ir en una copia cifrada con
 ella misma: va en papel y en la bóveda de Bitwarden.
+
+**hexwatch** — `hexwatch.db` (sondeos, eventos, estado y archivo) y su
+`config.json` (la flota y los parámetros: sin él la copia no dice a qué
+aeronaves se refiere). La base está en WAL con el demonio escribiendo, así
+que no se copia con `cp`: `VACUUM INTO` produce un único fichero
+consistente sin pararlo ([incidencias §7](incidencias.md) es la misma
+lección con Vaultwarden). La verificación es sobre la **copia**:
+`PRAGMA integrity_check`, que estén las tablas `polls`, `events` y `state`,
+y cuántos sondeos hubo en las últimas 24 h frente a los esperados (2.880
+por aeronave y fuente), para que un demonio parado se vea en el log. Es la
+única copia de datos que no se pueden volver a generar: las redes ADS-B no
+publican histórico ([decisiones §17](decisiones.md#17-la-copia-de-hexwatch-entra-como-las-demás)).
 
 ## Restaurar
 
@@ -212,6 +233,26 @@ Las fotos salen del tar ya en `data/prendas/`, que es justo donde las espera
 el bind mount. Para comprobar que base y disco cuadran después de restaurar:
 `docker compose exec armario-api node dist/server/src/limpiar-huerfanas.js`
 (en seco) debe decir cero huérfanas.
+
+### hexwatch
+
+```bash
+rclone copy gdrive:Hexwatch_Backups/hexwatch_FECHA.tar.gz.gpg .
+gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
+    --decrypt hexwatch_FECHA.tar.gz.gpg > hexwatch.tar.gz
+
+mkdir -p hexwatch && tar -xzf hexwatch.tar.gz -C hexwatch
+sqlite3 hexwatch/hexwatch.db 'PRAGMA integrity_check;'     # ok
+
+. ~/.config/hexwatch.env                  # HEXWATCH_DIR
+sudo systemctl stop hexwatch
+rm -f "$HEXWATCH_DIR"/hexwatch.db-wal "$HEXWATCH_DIR"/hexwatch.db-shm
+cp hexwatch/hexwatch.db hexwatch/config.json "$HEXWATCH_DIR/"
+sudo systemctl start hexwatch
+```
+
+Parar el servicio y borrar sus `-wal`/`-shm` no es opcional: son del
+fichero viejo, y SQLite los aplicaría sobre el restaurado.
 
 Comprobar antes de dar por buena la restauración de openGym que el `RP_ID`
 del `.env` recuperado es el mismo bajo el que se registraron las passkeys. Si no lo
@@ -295,6 +336,25 @@ datos desde los ajustes de Android y trayéndolo todo del servidor. Volvieron
 las prendas, sus conjuntos y sus fotos. Hasta hacer eso, la sincronización
 era una hipótesis con muy buena pinta.
 
+**hexwatch, restaurado el 23 de septiembre de 2026**, el mismo día de su
+primera copia. Bajada de Drive, descifrada y restaurada en un directorio
+aparte, sin tocar la base viva:
+
+```bash
+sqlite3 hexwatch/hexwatch.db 'PRAGMA integrity_check;'      # ok
+for t in polls events state; do                             # copia vs viva
+  echo "$t $(sqlite3 hexwatch/hexwatch.db "select count(*) from $t") \
+           $(sqlite3 -readonly "$HEXWATCH_DIR/hexwatch.db" "select count(*) from $t")"
+done
+# config.json con db_path a la copia y otro api_port:
+python3 -m hexwatch --config prueba.json status
+python3 -m hexwatch --config prueba.json events --limit 5
+```
+
+Cuadraron eventos y estado; sondeos, todos menos los del tick que llegó
+después de la copia. `config.json` idéntico, y `status`/`events` leyeron la
+base restaurada sin quejarse.
+
 ### Sistema
 
 No se restaura a mano: lo hace `scripts/restaurar-servidor.sh` fase a
@@ -312,7 +372,8 @@ gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
 
 - **Las restauraciones de datos se prueban a mano.** Debería ser un script
   mensual que levante, verifique y avise por el bot. El ensayo del sistema
-  en VM cubre las cinco de una vez, pero también se lanza a mano.
+  en VM cubre las seis de una vez, pero también se lanza a mano. La fase
+  de hexwatch (la 11) aún no ha pasado por ese ensayo.
 - **Todo depende de una cuenta de Google.** Datos, sistema y repos están
   en Drive y solo en Drive (y los repos, además, en GitHub). Falta una
   tercera copia en un disco externo que se conecte de vez en cuando: ya va

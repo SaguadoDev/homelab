@@ -13,7 +13,7 @@ Dos cosas a la vez, en el mismo proceso:
 - **Vigila en segundo plano.** Cada `INTERVALO_MONITORIZACION` segundos
   muestrea CPU, RAM, disco, temperatura y el estado de cada servicio, y
   manda un aviso cuando algo cruza su umbral. Una vez al día, pasadas las
-  07:00, mira además las cinco carpetas de copias en Drive y avisa si la
+  07:00, mira además las seis carpetas de copias en Drive y avisa si la
   última de alguna tiene más de 30 horas: es lo que nadie miraría hasta
   necesitarla.
 

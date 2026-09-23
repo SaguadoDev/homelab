@@ -92,6 +92,7 @@ flowchart LR
     api -.->|"04:30"| drive
     og -.->|"05:00"| drive
     arm -.->|"05:30"| drive
+    hx -.->|"06:30"| drive
 ```
 
 Detalle, flujos y redes de Docker en
@@ -119,7 +120,7 @@ Ficha de cada uno en [`docs/servicios.md`](docs/servicios.md).
 
 ## Decisiones
 
-Las cuatro que más forma le dan al montaje. Las dieciséis, con alternativas
+Las cuatro que más forma le dan al montaje. Las diecisiete, con alternativas
 descartadas, en [`docs/decisiones.md`](docs/decisiones.md).
 
 **Tailscale en lugar de abrir puertos.** Abrir el 443 de casa significa
@@ -221,11 +222,11 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
 - [x] **Copia del servidor entero y script de restauración.** Quinta copia
       nocturna con lo que no se regenera y `restaurar-servidor.sh` de
       Ubuntu limpia a servidor completo ([recuperación](docs/recuperacion.md)).
+- [x] **Copia de hexwatch.** Sexta copia nocturna y fase propia en
+      `restaurar-servidor.sh`; restaurada a mano el día de su primera copia.
 - [ ] **Probar la restauración automáticamente.** El ensayo en VM cubre
-      las cinco copias de una vez, pero se lanza a mano.
-- [ ] **hexwatch no tiene copia.** Su SQLite (sondeos y eventos) no entra
-      en ninguna copia nocturna ni en `restaurar-servidor.sh`. El servicio
-      se reconstruye en cinco minutos desde su repo; el histórico, no.
+      las seis copias de una vez, pero se lanza a mano, y la fase de
+      hexwatch todavía no ha pasado por él.
 - [ ] **Una tercera copia fuera de Google.** Datos, sistema y repos viven
       en Drive. Un `rclone sync gdrive:` a un disco externo de vez en
       cuando; ya va todo cifrado.
@@ -279,7 +280,7 @@ Los marcadores que aparecen:
 | `<host>.<tailnet>.ts.net` | El nombre MagicDNS de la máquina |
 | `<IP_LAN>` | Su IP en la red local |
 | `/home/homelab/` | El directorio del usuario de servicio |
-| `<repo-hexwatch>` | El nombre del repo de la app de seguimiento de vuelos |
+| `<repo-hexwatch>` | El nombre del repo de la app de seguimiento de vuelos. Los scripts no lo llevan: lo leen de `~/.config/hexwatch.env`, fuera del repo |
 | `<tu-correo>@example.com` | La cuenta de correo del SMTP |
 | `<token-...>`, `<contraseña-...>` | Secretos, que viven en `.env` fuera de git |
 

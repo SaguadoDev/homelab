@@ -292,7 +292,7 @@ propia.
 | Puerto | `127.0.0.1:3002` · tailnet `:8446` |
 | Datos | `hexwatch.db` (SQLite, WAL) · ~1 MB al día y aeronave sin podar |
 | Consumo | ~0,3 % de un núcleo, ~30 MB de RAM |
-| Copia | ninguna todavía (ver *Pendiente* en el README) |
+| Copia | 06:30 → Drive, 7 días ([backups](backups.md)) |
 
 **Sin Docker, a propósito.** Es el segundo servicio, después del bot, que
 corre directo sobre systemd
@@ -343,6 +343,12 @@ se pinta en amarillo; pasada media hora, rojo y alerta.
 antiguos; los que tienen posición se guardan siempre. No lo lanza el
 demonio: va en el cron de `server`, los domingos a mediodía, lejos de la
 ventana de copias.
+
+**Su copia es la única irreproducible.** Las demás bases guardan cosas que
+alguien introdujo y podría volver a introducir; esta, observaciones de redes
+que no publican histórico. Entra en la rotación nocturna como las otras, con
+`VACUUM INTO` en lugar de `cp` porque la base está en WAL con el demonio
+escribiendo ([decisiones §17](decisiones.md#17-la-copia-de-hexwatch-entra-como-las-demás)).
 
 ---
 

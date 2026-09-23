@@ -418,3 +418,38 @@ curl -m 5 http://<IP_LAN>:3002/status   # debe fallar
 **Descartado:** dejar `0.0.0.0` y confiar en el cortafuegos del host. Una
 regla más que mantener y que se puede olvidar en una reinstalación, para
 evitar algo que se arregla con una línea de configuración.
+
+---
+
+## 17. La copia de hexwatch entra como las demás
+
+Las otras cinco copias protegen datos que alguien introdujo: contraseñas,
+movimientos, entrenamientos, prendas, la configuración de la máquina. En el
+peor caso, se vuelven a introducir.
+
+Esta no. `hexwatch.db` son observaciones con marca de tiempo de redes ADS-B
+que **no publican histórico**: lo que el sondeo no capturó esa noche no
+existe en ningún otro sitio y no hay forma de volver a bajarlo. Es de las
+bases más pequeñas del servidor y la única literalmente irreproducible.
+Durante su primer día corrió sin copia, por aplazarla; no volvió a pasar.
+
+Se copia con `VACUUM INTO`, no con `cp`: la base está en modo WAL con el
+demonio escribiendo, y una copia a pelo sale a medio checkpoint
+([incidencias §7](incidencias.md), la misma lección con Vaultwarden). La
+verificación —`PRAGMA integrity_check`, tablas presentes, sondeos de las
+últimas 24 h frente a los esperados— se hace sobre **la copia**, porque es
+la copia la que hay que poder restaurar.
+
+El script vive en este repo y corre desde él, como el del sistema, aunque
+la aplicación viva en otro privado que aquí no se nombra: la ruta real la
+lee de `~/.config/hexwatch.env`, fuera de cualquier repo, y ese fichero
+viaja en el tar del sistema para que la restauración lo tenga antes de
+necesitarlo.
+
+**Descartado:** copiar solo los eventos y tirar los sondeos. Los sondeos
+vacíos son los que distinguen "la red no vio nada" de "el demonio estaba
+muerto". Para el tamaño ya está `prune --days 90`, que borra los vacíos
+antiguos y conserva siempre los que llevan posición.
+
+**Descartado:** meter el script en el repo de la aplicación, como el de
+Combina. Obligaría a nombrar ese repo aquí para documentarlo y programarlo.
