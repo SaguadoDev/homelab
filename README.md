@@ -223,10 +223,9 @@ La deuda que conozco. Está aquí porque reconocerla vale más que ocultarla.
       nocturna con lo que no se regenera y `restaurar-servidor.sh` de
       Ubuntu limpia a servidor completo ([recuperación](docs/recuperacion.md)).
 - [x] **Copia de hexwatch.** Sexta copia nocturna y fase propia en
-      `restaurar-servidor.sh`; restaurada a mano el día de su primera copia.
+      `restaurar-servidor.sh`, ensayada en VM el día de su primera copia.
 - [ ] **Probar la restauración automáticamente.** El ensayo en VM cubre
-      las seis copias de una vez, pero se lanza a mano, y la fase de
-      hexwatch todavía no ha pasado por él.
+      las seis copias de una vez, pero se lanza a mano.
 - [ ] **Una tercera copia fuera de Google.** Datos, sistema y repos viven
       en Drive. Un `rclone sync gdrive:` a un disco externo de vez en
       cuando; ya va todo cifrado.

@@ -372,8 +372,7 @@ gpg --batch --passphrase-file ~/.config/vault/backup-passphrase \
 
 - **Las restauraciones de datos se prueban a mano.** Debería ser un script
   mensual que levante, verifique y avise por el bot. El ensayo del sistema
-  en VM cubre las seis de una vez, pero también se lanza a mano. La fase
-  de hexwatch (la 11) aún no ha pasado por ese ensayo.
+  en VM cubre las seis de una vez, pero también se lanza a mano.
 - **Todo depende de una cuenta de Google.** Datos, sistema y repos están
   en Drive y solo en Drive (y los repos, además, en GitHub). Falta una
   tercera copia en un disco externo que se conecte de vez en cuando: ya va

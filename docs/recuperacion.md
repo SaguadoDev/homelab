@@ -142,8 +142,12 @@ multipass mount ~/Combina   ensayo:/mnt/repos/Combina
 multipass mount ~/homelab   ensayo:/mnt/repos/homelab
 multipass exec ensayo -- sudo adduser --disabled-password --gecos '' server
 multipass exec ensayo -- mkdir -p /tmp/kit
-# `multipass transfer` no puede leer directorios ocultos del home (confinamiento
-# del snap): se pasa por stdin.
+# `multipass transfer` no puede leer directorios ocultos del home ni el /tmp
+# del host (confinamiento del snap): lo pequeño se pasa por stdin. Lo grande
+# NO: por stdin un bundle de 2 MB llegó truncado sin error. Para eso,
+# copiarlo a un directorio no oculto del home y `multipass transfer`, y
+# comprobar siempre con sha256sum a los dos lados.
+# (multipass vive en /snap/bin, que puede no estar en el PATH.)
 cat ~/.config/vault/backup-passphrase | multipass exec ensayo -- bash -c 'cat > /tmp/kit/backup-passphrase'
 cat ~/.config/rclone/rclone.conf       | multipass exec ensayo -- bash -c 'cat > /tmp/kit/rclone.conf'
 multipass exec ensayo -- sudo bash /mnt/repos/homelab/scripts/restaurar-servidor.sh \
@@ -173,5 +177,6 @@ el script o se añada un servicio.
 
 | Fecha | Resultado |
 |---|---|
+| 23/09/2026 | Vía real con hexwatch. El tar de esa noche aún no llevaba lo nuevo, así que el kit se armó con lo que `backup-sistema.sh` sube desde entonces: el tar de las 06:00 más `~/.config/hexwatch.env` y el `config.json` de hexwatch (sumas recalculadas, recifrado) y bundles recién hechos de los cuatro repos. Sin `rclone.conf`, sin montajes, sin token. Fases 1–13 limpias a la primera en unos 4 minutos: el repo de hexwatch salió de su bundle con la ruta leída del tar, `hexwatch.db` bajó de `Hexwatch_Backups` con los mismos 3.858 sondeos y 4 eventos de la copia, unidad enlazada al repo, `/status` con `data_ok: true` y el demonio siguió sondeando sobre la base restaurada. El resto, igual que el 18/09 (2 usuarios y 97 ítems en Vaultwarden con `rsa_key` intacta, 14 tablas en `vault`, 35 prendas, 2 perfiles en openGym con `secret` intacto). Un tropiezo del procedimiento, no del script: un bundle pasado por stdin llegó truncado (ver arriba). |
 | 18/09/2026 (2º) | Vía real: kit con solo el tar y los tres bundles bajados de Drive, sin `rclone.conf`, sin montajes, sin token. Fases 1–12 limpias a la primera en unos 6 minutos: `rclone.conf` salió del tar, los tres repos de los bundles, y los mismos datos que en el primer ensayo. |
 | 18/09/2026 | Primer ensayo, VM multipass en el propio servidor (2 vCPU, 6 GB). Fases 1–12 en unos 8 minutos con datos reales de Drive: 2 usuarios y 97 ítems en Vaultwarden con `rsa_key` intacta, 14 tablas en `vault`, rol y base `armario` con 35 filas, 2 perfiles en openGym con `secret` intacto, AdGuard filtrando en la IP de la VM. Dos retoques al script salidos del ensayo: openGym se comprueba contra `/api/health` (el healthcheck de la imagen sondea cada 5 min y la espera agotaba), y AdGuard reintenta el bloqueo durante dos minutos mientras baja las listas. Sin tocar producción. |
