@@ -160,9 +160,10 @@ Docker (se reconstruyen desde los compose), `opengym/media` (la baja el
 contenedor) y **la passphrase**, que no puede ir en una copia cifrada con
 ella misma: va en papel y en la bóveda de Bitwarden.
 
-**hexwatch** — `hexwatch.db` (sondeos, eventos, estado y archivo) y su
-`config.json` (la flota y los parámetros: sin él la copia no dice a qué
-aeronaves se refiere). La base está en WAL con el demonio escribiendo, así
+**hexwatch** — `hexwatch.db` (la flota, sondeos, eventos, avisos, estado y
+archivo) y su `config.json` (la base y los parámetros del sondeo). La flota
+va dentro de la base desde que se edita por la API: `config.json` solo la
+sembró la primera vez, así que restaurar la base es lo que la recupera. La base está en WAL con el demonio escribiendo, así
 que no se copia con `cp`: `VACUUM INTO` produce un único fichero
 consistente sin pararlo ([incidencias §7](incidencias.md) es la misma
 lección con Vaultwarden). La verificación es sobre la **copia**:

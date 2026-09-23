@@ -453,3 +453,27 @@ antiguos y conserva siempre los que llevan posición.
 
 **Descartado:** meter el script en el repo de la aplicación, como el de
 Combina. Obligaría a nombrar ese repo aquí para documentarlo y programarlo.
+
+---
+
+## 18. La flota de hexwatch se edita por la API, sin autenticación
+
+La lista de aeronaves dejó de vivir en `config.json` y pasó a la base, con
+rutas para añadir, cambiar y quitar aeronaves que la app usa desde sus
+ajustes. Hasta entonces la API solo leía; desde ahí **escribe**, y sigue
+sin autenticación.
+
+Se decidió así a conciencia. La API solo es alcanzable por el tailnet
+([§16](#16-hexwatch-en-127001-con-puertos-comprobados)), en el tailnet solo
+hay dispositivos propios, y lo peor que puede hacer alguien ahí dentro es
+cambiar qué aeronaves se siguen: nada que se pierda (el histórico se queda
+aunque se quite una aeronave) ni que salga de casa. Un token habría que
+compilarlo en la app, rotarlo a mano y guardarlo en algún sitio, para
+proteger algo que ya protege la red.
+
+**Lo que cambiaría la decisión:** compartir el tailnet con alguien más, o
+que alguna ruta llegue a poder borrar datos. Entonces sí, token.
+
+**Descartado:** seguir editando `config.json` y reiniciando. Obligaba a
+entrar al servidor para cada cambio de flota, que es justo lo que se hace
+desde el móvil y a menudo.

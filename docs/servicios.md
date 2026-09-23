@@ -301,16 +301,30 @@ La unidad vive en el repo de la aplicación (`deploy/hexwatch.service`) y
 `/etc/systemd/system/hexwatch.service` es un *symlink* a ella, como la del
 bot: una sola copia, sin nada que sincronizar.
 
-**El despliegue es el propio clon**, como Combina: `config.json` (qué
-aeronaves y dónde está su base) y la base de datos cuelgan de ahí,
-ignorados por su `.gitignore`.
+**El despliegue es el propio clon**, como Combina: `config.json` (base,
+parámetros del sondeo) y la base de datos cuelgan de ahí, ignorados por su
+`.gitignore`.
+
+**La flota vive en la base, no en `config.json`.** La lista de aeronaves
+de `config.json` solo siembra la base la primera vez; desde entonces se
+gestiona desde la app con la propia API y se aplica **en caliente**, sin
+reiniciar: el siguiente sondeo ya pregunta por la lista nueva. Quitar una
+aeronave deja su histórico intacto; volver a añadirla lo recupera.
 
 **Endpoints.**
 
 ```
-GET /status[?hex=X]          estado actual por aeronave, desde cuándo y si hay datos frescos
-GET /events?limit=N[&hex=X]  últimos eventos (salidas, llegadas, cortes de datos)
+GET    /status[?hex=X]                 estado por aeronave, desde cuándo y si hay datos frescos
+GET    /events[?limit=N&hex=X&since_id=N]   eventos (salidas, llegadas, cortes de datos)
+GET    /flights?hex=X / /track?hex=X&from=T1&to=T2   historial de salidas y su recorrido
+GET    /alerts/wait?since_id=N         long-poll: avisos por cambio de estado, para la app
+GET    /aircraft · POST /aircraft · PATCH|DELETE /aircraft/<hex>   la flota
+GET    /discover?callsign=X            buscar una aeronave en vuelo por indicativo
 ```
+
+`/alerts/wait` es un *long-poll*: la app deja la petición abierta y el
+servidor responde en cuanto hay un aviso nuevo, sin servicios de
+notificaciones de terceros de por medio.
 
 **`FUERA` no significa "volando".** Significa *salió y no se la ha visto
 volver*. `/status` distingue lo observado de lo asumido (`assumed`), dice
@@ -330,6 +344,12 @@ caliente.
 **Sin autenticación, así que solo tailnet.** La API escucha en loopback y
 la saca `tailscale serve`
 ([decisiones §16](decisiones.md#16-hexwatch-en-127001-con-puertos-comprobados)).
+Desde que la flota se edita por la API, también **escribe** sin
+autenticación: quien esté en el tailnet puede añadir o quitar aeronaves
+([decisiones §18](decisiones.md#18-la-flota-de-hexwatch-se-edita-por-la-api-sin-autenticación)).
+`/discover` consulta las APIs comunitarias en el momento, así que cada
+búsqueda es una petición más a redes de voluntarios: se usa a mano, no en
+bucle.
 La URL del 8446 va compilada en la app: se decidió antes de compilar nada,
 que es la lección de las passkeys.
 

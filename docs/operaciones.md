@@ -447,9 +447,22 @@ el *symlink* ya apunta al fichero nuevo.
 
 ### Añadir o quitar aeronaves
 
-Se edita `aircraft` en `config.json` y `sudo systemctl restart hexwatch`.
-Todo va indexado por hex: una aeronave nueva arranca limpia y una que se
-quita conserva su histórico, ignorado.
+Desde la app (Ajustes), o a mano con la API. Se aplica en caliente, **sin
+reiniciar**:
+
+```bash
+curl -s http://127.0.0.1:3002/aircraft                              # la flota
+curl -s -X POST http://127.0.0.1:3002/aircraft \
+     -H 'Content-Type: application/json' -d '{"hex":"<hex>","name":"<nombre>"}'
+curl -s -X DELETE http://127.0.0.1:3002/aircraft/<hex>
+curl -s 'http://127.0.0.1:3002/discover?callsign=<indicativo>'      # buscar un hex
+```
+
+**Editar `aircraft` en `config.json` ya no cambia nada**: solo sembró la
+base la primera vez, y el log avisa si el fichero trae aeronaves que no
+están en la flota. Todo va indexado por hex: una aeronave nueva arranca
+limpia y una que se quita conserva su histórico, que vuelve si se añade
+otra vez.
 
 ---
 
